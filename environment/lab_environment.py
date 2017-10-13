@@ -88,6 +88,9 @@ class LabEnvironment(environment.Environment):
     self.last_state = self._preprocess_frame(obs)
     self.last_action = 0
     self.last_reward = 0
+    last_action_reward = np.zeros([self.action_size+1])
+    
+    return self.last_state, last_action_reward
 
   def stop(self):
     self.conn.send([COMMAND_TERMINATE, 0])
