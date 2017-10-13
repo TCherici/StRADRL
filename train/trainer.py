@@ -333,7 +333,11 @@ class Trainer(object):
       rp_c[2] = 1.0 # negative
     batch_rp_c.append(rp_c)
     return batch_rp_si, batch_rp_c
-  
+    
+    
+  def _process_tc(self):
+    # [Temporal coherence]
+    self.local_network.run_test 
   
   def process(self, sess, global_t, summary_writer, summary_op, score_input):
     # Fill experience replay buffer

@@ -176,17 +176,22 @@ class UnrealModel(object):
     # pc conv layers
     pc_conv_output = self._base_conv_layers(self.pc_input, reuse=True)
 
-    # pc lastm layers
+    # pc lstm layers
     pc_initial_lstm_state = self.lstm_cell.zero_state(1, tf.float32)
     # (Initial state is always resetted.)
     
     pc_lstm_outputs, _ = self._base_lstm_layer(pc_conv_output,
                                                self.pc_last_action_reward_input,
                                                pc_initial_lstm_state,
-                                               reuse=True)
-    
+                                               reuse=True)    
     self.pc_q, self.pc_q_max = self._pc_deconv_layers(pc_lstm_outputs)
 
+  def _create_tc_network(self):
+    # State (Image input)
+    self.tc_input = tf.placeholder("float",[None, 84, 84, 3])
+    
+    # tc conv layers
+    self.tc_output = self._base_conv_layers(self.tc_input, reuse=True)
     
   def _create_pc_network_for_display(self):
     self.pc_q_disp, self.pc_q_max_disp = self._pc_deconv_layers(self.base_lstm_outputs, reuse=True)
@@ -318,7 +323,6 @@ class UnrealModel(object):
     vr_loss = tf.nn.l2_loss(self.vr_r - self.vr_v)
     return vr_loss
 
-
   def _rp_loss(self):
     # reward prediction target. one hot vector
     self.rp_c_target = tf.placeholder("float", [1,3])
@@ -327,6 +331,10 @@ class UnrealModel(object):
     rp_c = tf.clip_by_value(self.rp_c, 1e-20, 1.0)
     rp_loss = -tf.reduce_sum(self.rp_c_target * tf.log(rp_c))
     return rp_loss
+    
+  def _tc_loss(self):
+    # temporal coherence loss
+    self.tc_target = tf.placeholder("float", [
     
     
   def prepare_loss(self):
