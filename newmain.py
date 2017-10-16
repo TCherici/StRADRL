@@ -113,7 +113,6 @@ class Application(object):
         logger.debug("done setting up RunnerTread")
         self.runner.start_runner(self.sess, self.summary_writer)
         #logger.debug(threading.enumerate())
-        self.runner.run()
         
         check = self.runner.queue.get()
         logger.debug(check.shape)

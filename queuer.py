@@ -92,7 +92,8 @@ class RunnerThread(threading.Thread):
             self.summary_writer, self.visualise)
         while True:
             self.queue.put(next(rollout_provider), timeout=600.0)
-        
+            logger.debug("added rollout. Approx queue length:{}".format(self.queue.qsize()))
+
         
 def env_runner(env, sess, policy, num_local_steps, summary_writer, render):
     """
@@ -102,13 +103,12 @@ def env_runner(env, sess, policy, num_local_steps, summary_writer, render):
     """
     logger.debug("resetting env in session {}".format(sess))
     last_state, last_action_reward = env.reset()
-    logger.debug(last_action_reward.shape)
+    #logger.debug(last_action_reward.shape)
     length = 0
     rewards = 0
 
     while True:
         terminal_end = False
-        logger.debug("going...")
         rollout = PartialRollout()
         for _ in range(num_local_steps):
             fetched = policy.run_base_policy_and_value(sess, last_state, last_action_reward)
@@ -138,7 +138,7 @@ def env_runner(env, sess, policy, num_local_steps, summary_writer, render):
             
             #@TODO investigate timestep_limit
             #timestep_limit = env.spec.tags.get('wrapper_config.TimeLimit.max_episode_steps')
-            timestep_limit = 1000 #practically infinite
+            timestep_limit = 1000
             if terminal or length >= timestep_limit:
                 terminal_end = True
                 if length >= timestep_limit: #or not env.metadata.get('semantics.autoreset'):
@@ -148,17 +148,10 @@ def env_runner(env, sess, policy, num_local_steps, summary_writer, render):
                 length = 0
                 rewards = 0
                 break
-        logger.debug("tot rewards:{}".format(rewards))
-
+                
         if not terminal_end:
             rollout.r = policy.run_base_value(sess, last_state, last_action_reward)
-    
         # once we have enough experience, yield it, and have the ThreadRunner place it on a queue
         yield rollout
-        
-        
-        
-        
-        
-        
-        
+       
+    

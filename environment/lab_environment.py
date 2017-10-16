@@ -110,14 +110,9 @@ class LabEnvironment(environment.Environment):
     return image
 
   def process(self, action):
-    logger.debug("action:{}".format(action))
     real_action = LabEnvironment.ACTION_LIST[action]
     self.conn.send([COMMAND_ACTION, real_action])
     obs, reward, terminal = self.conn.recv()
-    logger.debug(obs.shape)
-    logger.debug(reward)
-    logger.debug(terminal)
-    #logger.debug("obs.shape:{},reward.shape:{},terminal.shape:{}".format(obs.shape,reward.shape,terminal.shape))
     if not terminal:
       state = self._preprocess_frame(obs)
     else:

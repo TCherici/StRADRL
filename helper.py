@@ -17,7 +17,8 @@ def logger_init(log_dir, id, loglevel='info', redirect_tf=True):
     full_log_path = os.path.join(log_dir,  str(id) + '.app.log')
     filehandler = logging.FileHandler(full_log_path)
     streamhandler = logging.StreamHandler()
-    f = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    f = logging.Formatter("%(asctime)s - %(levelname)s - %(threadName)s:%(name)s:%(lineno)s - %(message)s",
+                          "%H:%M:%S")
     filehandler.setFormatter(f)
     streamhandler.setFormatter(f)
     logger.addHandler(filehandler)
