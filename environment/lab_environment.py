@@ -6,8 +6,11 @@ from __future__ import print_function
 from multiprocessing import Process, Pipe
 import numpy as np
 import deepmind_lab
+import logging
 
 from environment import environment
+
+logger = logging.getLogger('StRADRL.lab_environment')
 
 COMMAND_RESET     = 0
 COMMAND_ACTION    = 1
@@ -23,7 +26,7 @@ def worker(conn, env_name):
       'width': str(84),
       'height': str(84)
     })
-  conn.send(0)
+  conn.send(COMMAND_RESET)
   
   while True:
     command, arg = conn.recv()
@@ -43,8 +46,8 @@ def worker(conn, env_name):
     elif command == COMMAND_TERMINATE:
       break
     else:
-      print("bad command: {}".format(command))
-  env.close()      
+      logger.warn("bad command: {}".format(command))
+  env.close()
   conn.send(0)
   conn.close()
 
@@ -79,11 +82,13 @@ class LabEnvironment(environment.Environment):
     self.proc = Process(target=worker, args=(child_conn, env_name))
     self.proc.start()
     self.conn.recv()
-    self.reset()
+    #self.reset()
 
   def reset(self):
     self.conn.send([COMMAND_RESET, 0])
     obs = self.conn.recv()
+    #logger.debug("obs: {}".format(obs))
+    logger.debug("obs.shape: {}".format(obs.shape))
     
     self.last_state = self._preprocess_frame(obs)
     self.last_action = 0
@@ -97,7 +102,7 @@ class LabEnvironment(environment.Environment):
     ret = self.conn.recv()
     self.conn.close()
     self.proc.join()
-    print("lab environment stopped")
+    logger.info("lab environment stopped")
     
   def _preprocess_frame(self, image):
     image = image.astype(np.float32)
@@ -105,11 +110,14 @@ class LabEnvironment(environment.Environment):
     return image
 
   def process(self, action):
+    logger.debug("action:{}".format(action))
     real_action = LabEnvironment.ACTION_LIST[action]
-
     self.conn.send([COMMAND_ACTION, real_action])
     obs, reward, terminal = self.conn.recv()
-
+    logger.debug(obs.shape)
+    logger.debug(reward)
+    logger.debug(terminal)
+    #logger.debug("obs.shape:{},reward.shape:{},terminal.shape:{}".format(obs.shape,reward.shape,terminal.shape))
     if not terminal:
       state = self._preprocess_frame(obs)
     else:

@@ -112,7 +112,7 @@ class Application(object):
         self.runner = RunnerThread(self.environment, self.global_network, LOCAL_ENV_STEPS, visualise)
         logger.debug("done setting up RunnerTread")
         self.runner.start_runner(self.sess, self.summary_writer)
-        logger.debug(threading.enumerate())
+        #logger.debug(threading.enumerate())
         self.runner.run()
         
         check = self.runner.queue.get()

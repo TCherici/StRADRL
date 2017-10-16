@@ -100,7 +100,7 @@ def env_runner(env, sess, policy, num_local_steps, summary_writer, render):
     the policy, and as long as the rollout exceeds a certain length, the thread
     runner appends the policy to the queue.
     """
-    #@TODO env.reset needs to output initial state and reward for maze and gym env
+    logger.debug("resetting env in session {}".format(sess))
     last_state, last_action_reward = env.reset()
     logger.debug(last_action_reward.shape)
     length = 0
@@ -108,8 +108,8 @@ def env_runner(env, sess, policy, num_local_steps, summary_writer, render):
 
     while True:
         terminal_end = False
+        logger.debug("going...")
         rollout = PartialRollout()
-
         for _ in range(num_local_steps):
             fetched = policy.run_base_policy_and_value(sess, last_state, last_action_reward)
             action, value_, last_features = fetched[0], fetched[1], fetched[2:]
@@ -144,10 +144,11 @@ def env_runner(env, sess, policy, num_local_steps, summary_writer, render):
                 if length >= timestep_limit: #or not env.metadata.get('semantics.autoreset'):
                     last_state = env.reset()
                 last_features = policy.get_initial_features()
-                print("Episode finished. Sum of rewards: %d. Length: %d" % (rewards, length))
+                logger.info("Episode finished. Sum of rewards: %d. Length: %d" % (rewards, length))
                 length = 0
                 rewards = 0
                 break
+        logger.debug("tot rewards:{}".format(rewards))
 
         if not terminal_end:
             rollout.r = policy.run_base_value(sess, last_state, last_action_reward)
