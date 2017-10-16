@@ -18,6 +18,7 @@ from helper import logger_init, generate_id
 from environment.environment import Environment
 from model.model import UnrealModel
 from train.rmsprop_applier import RMSPropApplier
+from train.base_trainer import BaseTrainer
 from queuer import RunnerThread
 from options import get_options
 
@@ -49,6 +50,7 @@ class Application(object):
         logger.debug("getting action size...") 
         action_size = Environment.get_action_size(flags.env_type,
                                                   flags.env_name)
+        # Setup Global Network
         logger.debug("loading global model...")
         self.global_network = UnrealModel(action_size,
                                           -1,
@@ -60,7 +62,8 @@ class Application(object):
                                           device)
         logger.debug("done loading global model")
         learning_rate_input = tf.placeholder("float")
-    
+        
+        # Setup gradient calculator
         grad_applier = RMSPropApplier(learning_rate = learning_rate_input,
                                   decay = flags.rmsp_alpha,
                                   momentum = 0.0,
@@ -68,16 +71,39 @@ class Application(object):
                                   clip_norm = flags.grad_norm_clip,
                                   device = device)
 
+        # Start environment
         self.environment = Environment.create_environment(flags.env_type,
                                                       flags.env_name)
         logger.debug("done loading environment")
-
+        
+        # Start tensorflow session
         config = tf.ConfigProto(log_device_placement=False,
                             allow_soft_placement=True)
         config.gpu_options.allow_growth = True
         self.sess = tf.Session(config=config)
         
         self.sess.run(tf.global_variables_initializer())
+        
+        # Setup runner
+        self.runner = RunnerThread(self.environment, self.global_network, LOCAL_ENV_STEPS, visualise)
+        logger.debug("done setting up RunnerTread")
+        
+        #@TODO check device usage: should we build a cluster?
+        # Setup Base Network
+        self.base_trainer = BaseTrainer(self.runner,
+                                        self.global_network,
+                                        initial_learning_rate,
+                                        learning_rate_input,
+                                        grad_applier,
+                                        flags.env_type,
+                                        flags.env_name,
+                                        flags.entropy_beta,
+                                        flags.local_t_max,
+                                        flags.gamma,
+                                        flags.experience_history_size,
+                                        flags.max_time_step,
+                                        device)
+                                        
         # summary for tensorboard
         self.score_input = tf.placeholder(tf.int32)
         tf.summary.scalar("score", self.score_input)
@@ -108,21 +134,19 @@ class Application(object):
             # set wall time
             self.wall_t = 0.0
             self.next_save_steps = flags.save_interval_step
-
-        self.runner = RunnerThread(self.environment, self.global_network, LOCAL_ENV_STEPS, visualise)
-        logger.debug("done setting up RunnerTread")
-        self.runner.start_runner(self.sess, self.summary_writer)
-        #logger.debug(threading.enumerate())
         
-        while True:
-            check = self.runner.queue.get()
-            logger.debug(check.rewards[-1])
+       
 
         signal.signal(signal.SIGINT, self.signal_handler)
 
         # set start time
         self.start_time = time.time() - self.wall_t
-
+        # Start runner
+        self.runner.start_runner(self.sess, self.summary_writer)
+        # Start base_network
+        self.base_trainer.set_start_time(self.start_time)
+        self.base_trainer.process(self.sess)
+        logger.debug(threading.enumerate())
 
         logger.info('Press Ctrl+C to stop')
         signal.pause()
