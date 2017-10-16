@@ -114,8 +114,9 @@ class Application(object):
         self.runner.start_runner(self.sess, self.summary_writer)
         #logger.debug(threading.enumerate())
         
-        check = self.runner.queue.get()
-        logger.debug(check.shape)
+        while True:
+            check = self.runner.queue.get()
+            logger.debug(check.rewards[-1])
 
         signal.signal(signal.SIGINT, self.signal_handler)
 

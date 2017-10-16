@@ -141,9 +141,11 @@ def env_runner(env, sess, policy, num_local_steps, summary_writer, render):
             timestep_limit = 1000
             if terminal or length >= timestep_limit:
                 terminal_end = True
-                if length >= timestep_limit: #or not env.metadata.get('semantics.autoreset'):
-                    last_state = env.reset()
-                last_features = policy.get_initial_features()
+                # the if condition below has been disabled because deepmind lab has no metadata
+                #if length >= timestep_limit or not env.metadata.get('semantics.autoreset'):
+                last_state, last_action_reward = env.reset()
+                policy.reset_state()
+                last_features = policy.base_lstm_state_out
                 logger.info("Episode finished. Sum of rewards: %d. Length: %d" % (rewards, length))
                 length = 0
                 rewards = 0

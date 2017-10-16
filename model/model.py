@@ -375,7 +375,7 @@ class UnrealModel(object):
                                                                          self.base_initial_lstm_state0 : self.base_lstm_state_out[0],
                                                                          self.base_initial_lstm_state1 : self.base_lstm_state_out[1]} )
         # pi_out: (1,3), v_out: (1)
-        return (pi_out[0], v_out[0])
+        return (pi_out[0], v_out[0], self.base_lstm_state_out)
 
   
     def run_base_policy_value_pc_q(self, sess, s_t, last_action_reward):
