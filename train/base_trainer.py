@@ -22,7 +22,7 @@ logger = logging.getLogger("StRADRL.base_trainer")
 LOG_INTERVAL = 1000
 PERFORMANCE_LOG_INTERVAL = 1000
 
-Batch = namedtuple("Batch", ["si", "a", "adv", "r", "terminal", "features"])
+Batch = namedtuple("Batch", ["si", "a", "a_r", "adv", "r", "terminal", "features"])
 
 def process_rollout(rollout, gamma, lambda_=1.0):
     """
@@ -31,6 +31,7 @@ def process_rollout(rollout, gamma, lambda_=1.0):
     batch_si = np.asarray(rollout.states)
     batch_a = np.asarray(rollout.actions)
     rewards = np.asarray(rollout.rewards)
+    action_reward = np.concatenate((batch_a,rewards[:,np.newaxis]), axis=1)
     vpred_t = np.asarray(rollout.values + [rollout.r])
 
     rewards_plus_v = np.asarray(rollout.rewards + [rollout.r])
@@ -41,7 +42,7 @@ def process_rollout(rollout, gamma, lambda_=1.0):
     batch_adv = discount(delta_t, gamma * lambda_)
 
     features = rollout.features[0]
-    return Batch(batch_si, batch_a, batch_adv, batch_r, rollout.terminal, features)
+    return Batch(batch_si, batch_a, action_reward, batch_adv, batch_r, rollout.terminal, features)
 
 def discount(x, gamma):
     return scipy.signal.lfilter([1], [1, -gamma], x[::-1], axis=0)[::-1]
@@ -107,18 +108,28 @@ class BaseTrainer(object):
         """
         self explanatory:  take a rollout from the queue of the thread runner.
         """
-        rollout = self.runner.queue.get(timeout=600.0)
-        while not rollout.terminal:
-            try:
-                rollout.extend(self.runner.queue.get_nowait())
-            except queue.Empty:
-                break
+        #@TODO change 100 to a possible variable
+        rollout_full = False
+        count = 0
+        while not rollout_full:
+            if count == 0:
+                rollout = self.runner.queue.get(timeout=600.0)
+                count += 1
+            else:
+                try:
+                    rollout.extend(self.runner.queue.get_nowait())
+                    count += 1
+                except queue.Empty:
+                    #logger.warn("!!! queue was empty !!!")
+                    continue
+            if count == 5 or rollout.terminal:
+                rollout_full = True
         logger.debug("pulled batch from rollout, length:{}".format(len(rollout.rewards)))
         return rollout
     
     
     #@TODO get this whole thing working
-    def _process_base(self, sess, global_t, summary_writer, summary_op, score_input):
+    def _process_base(self, sess, global_t, runner, summary_writer, summary_op, score_input):
         # [Base A3C]
         states = []
         last_action_rewards = []
@@ -150,11 +161,9 @@ class BaseTrainer(object):
             last_action_rewards.append(last_action_reward)
             actions.append(action)
             values.append(value_)
-
+            
             if (self.thread_index == 0) and (self.local_t % LOG_INTERVAL == 0):
                 logger.info("localtime={}".format(self.local_t))
-                logger.info("pi={}".format(pi_))
-                logger.info(" V={}".format(value_))
 
             prev_state = self.environment.last_state
 
@@ -216,5 +225,37 @@ class BaseTrainer(object):
 
         return batch_si, last_action_rewards, batch_a, batch_adv, batch_R, start_lstm_state
 
+    def process(self, sess, global_t, summary_writer, summary_op, score_input):
+        # Copy weights from shared to local
+        sess.run( self.sync )
+        # get batch from process_rollout
+        rollout = self.pull_batch_from_queue()
+        batch = process_rollout(rollout, gamma=0.99, lambda_=1.0)
+        self.local_t += 1
+        if self.local_t % 100 == 0:
+            logger.info("localtime={}".format(self.local_t))
+            logger.info("action={}".format(batch.a[:,-1]))
+            logger.info(" V={}".format(batch.r[-1]))
+        cur_learning_rate = self._anneal_learning_rate(global_t)
+
+        feed_dict = {
+            self.local_network.base_input: batch.si,
+            self.local_network.base_last_action_reward_input: batch.a_r,
+            self.local_network.base_a: batch.a,
+            self.local_network.base_adv: batch.adv,
+            self.local_network.base_r: batch.r,
+            self.local_network.base_initial_lstm_state: batch.features,
+            # [common]
+            self.learning_rate_input: cur_learning_rate
+        }
         
-    
+        # Calculate gradients and copy them to global netowrk.
+        sess.run( self.apply_gradients, feed_dict=feed_dict )
+        
+        # Return advanced local step size
+        diff_local_t = self.local_t - start_local_t
+        return diff_local_t
+        
+        
+        
+        

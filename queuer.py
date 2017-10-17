@@ -13,24 +13,6 @@ logger = logging.getLogger('StRADRL.queuer')
 
 QUEUE_LENGTH = 15
 
-def process_rollout(rollout, gamma, lambda_=1.0):
-    """
-    given a rollout, compute its returns and the advantage
-    """
-    batch_si = np.asarray(rollout.states)
-    batch_a = np.asarray(rollout.actions)
-    rewards = np.asarray(rollout.rewards)
-    vpred_t = np.asarray(rollout.values + [rollout.r])
-
-    rewards_plus_v = np.asarray(rollout.rewards + [rollout.r])
-    batch_r = discount(rewards_plus_v, gamma)[:-1]
-    delta_t = rewards + gamma * vpred_t[1:] - vpred_t[:-1]
-    # this formula for the advantage comes "Generalized Advantage Estimation":
-    # https://arxiv.org/abs/1506.02438
-    batch_adv = discount(delta_t, gamma * lambda_)
-
-    features = rollout.features[0]
-    return Batch(batch_si, batch_a, batch_adv, batch_r, rollout.terminal, features)
 
 class PartialRollout(object):
     """
@@ -92,7 +74,7 @@ class RunnerThread(threading.Thread):
             self.summary_writer, self.visualise)
         while True:
             self.queue.put(next(rollout_provider), timeout=600.0)
-            logger.debug("added rollout. Approx queue length:{}".format(self.queue.qsize()))
+            #logger.debug("added rollout. Approx queue length:{}".format(self.queue.qsize()))
 
         
 def env_runner(env, sess, policy, num_local_steps, summary_writer, render):
@@ -125,7 +107,6 @@ def env_runner(env, sess, policy, num_local_steps, summary_writer, render):
             
             last_state = state
             last_action_reward = np.append(action,reward)
-            #logger.debug("last_action_reward:{}".format(last_action_reward))
             
             #@TODO fix information pipeline
             info = False 

@@ -33,10 +33,41 @@ visualise = False
 # get command line args
 flags = get_options("training")
 
+
+
 class Application(object):
     def __init__(self):
         pass
-    
+        
+    def base_train_function(self):
+        """ Train routine for base_trainer. """
+        
+        trainer = self.base_trainer
+        
+        # set start_time
+        trainer.set_start_time(self.start_time)
+      
+        while True:
+            if self.stop_requested:
+                break
+            if self.terminate_requested:
+                trainer.stop()
+                break
+            if self.global_t > flags.max_time_step:
+                trainer.stop()
+                break
+            if self.global_t > self.next_save_steps:
+                # Save checkpoint
+                self.save()
+            
+            diff_global_t = trainer.process(self.sess,
+                                          self.global_t,
+                                          self.summary_writer,
+                                          self.summary_op,
+                                          self.score_input)
+            self.global_t += diff_global_t
+            
+            
     def run(self):
         device = "/cpu:0"
         if USE_GPU:
@@ -144,8 +175,8 @@ class Application(object):
         # Start runner
         self.runner.start_runner(self.sess, self.summary_writer)
         # Start base_network
-        self.base_trainer.set_start_time(self.start_time)
-        self.base_trainer.process(self.sess)
+        self.base_train_thread = threading.Thread(target=self.base_train_function, args=())
+        self.base_train_thread.start()
         logger.debug(threading.enumerate())
 
         logger.info('Press Ctrl+C to stop')
