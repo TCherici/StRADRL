@@ -52,7 +52,10 @@ class MazeEnvironment(environment.Environment):
     self.y = self._start_pos[1]
     self.last_state = self._get_current_image()
     self.last_action = 0
-    self.last_reward = 0    
+    self.last_reward = 0
+    last_action_reward = np.zeros([self.action_size+1])
+    
+    return self.last_state, last_action_reward
     
   def _put_pixel(self, image, x, y, channel):
     for i in range(12):
