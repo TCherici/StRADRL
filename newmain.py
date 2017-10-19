@@ -107,14 +107,6 @@ class Application(object):
                                                       flags.env_name)
         logger.debug("done loading environment")
         
-        # Start tensorflow session
-        config = tf.ConfigProto(log_device_placement=False,
-                            allow_soft_placement=True)
-        config.gpu_options.allow_growth = True
-        self.sess = tf.Session(config=config)
-        
-        self.sess.run(tf.global_variables_initializer())
-        
         # Setup runner
         self.runner = RunnerThread(self.environment, self.global_network, LOCAL_ENV_STEPS, visualise)
         logger.debug("done setting up RunnerTread")
@@ -134,7 +126,15 @@ class Application(object):
                                         flags.experience_history_size,
                                         flags.max_time_step,
                                         device)
-                                        
+        
+        # Start tensorflow session
+        config = tf.ConfigProto(log_device_placement=False,
+                            allow_soft_placement=True)
+        config.gpu_options.allow_growth = True
+        self.sess = tf.Session(config=config)
+        
+        self.sess.run(tf.global_variables_initializer())
+        
         # summary for tensorboard
         self.score_input = tf.placeholder(tf.int32)
         tf.summary.scalar("score", self.score_input)

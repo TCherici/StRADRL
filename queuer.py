@@ -27,14 +27,16 @@ class PartialRollout(object):
         self.r = 0.0
         self.terminal = False
         self.features = []
+        self.pixel_changes = []
 
-    def add(self, state, action, reward, value, terminal, features):
+    def add(self, state, action, reward, value, terminal, features, pixel_change):
         self.states += [state]
         self.actions += [action]
         self.rewards += [reward]
         self.values += [value]
         self.terminal = terminal
         self.features += [features]
+        self.pixel_changes += [pixel_change]
 
     def extend(self, other):
         assert not self.terminal
@@ -45,6 +47,7 @@ class PartialRollout(object):
         self.r = other.r
         self.terminal = other.terminal
         self.features.extend(other.features)
+        self.pixel_changes.extend(other.pixel_changes)
 
 class RunnerThread(threading.Thread):
     def __init__(self, env, policy, num_local_steps, visualise):
@@ -96,12 +99,12 @@ def env_runner(env, sess, policy, num_local_steps, summary_writer, render):
             fetched = policy.run_base_policy_and_value(sess, last_state, last_action_reward)
             action, value_, last_features = fetched[0], fetched[1], fetched[2:]
             # argmax to convert from one-hot
-            state, reward, terminal, _ = env.process(action.argmax())
+            state, reward, terminal, pixel_change = env.process(action.argmax())
             if render:
                 env.render()
 
             # collect the experience
-            rollout.add(last_state, action, reward, value_, terminal, last_features)
+            rollout.add(last_state, action, reward, value_, terminal, last_features, pixel_change)
             length += 1
             rewards += reward
             

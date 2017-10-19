@@ -22,7 +22,7 @@ logger = logging.getLogger("StRADRL.base_trainer")
 LOG_INTERVAL = 1000
 PERFORMANCE_LOG_INTERVAL = 1000
 
-Batch = namedtuple("Batch", ["si", "a", "a_r", "adv", "r", "terminal", "features"])
+Batch = namedtuple("Batch", ["si", "a", "a_r", "adv", "r", "terminal", "features", "pc"])
 
 def process_rollout(rollout, gamma, lambda_=1.0):
     """
@@ -42,7 +42,8 @@ def process_rollout(rollout, gamma, lambda_=1.0):
     batch_adv = discount(delta_t, gamma * lambda_)
 
     features = rollout.features[0]
-    return Batch(batch_si, batch_a, action_reward, batch_adv, batch_r, rollout.terminal, features)
+    batch_pc = np.asarray(rollout.pixel_changes)
+    return Batch(batch_si, batch_a, action_reward, batch_adv, batch_r, rollout.terminal, features, batch_pc)
 
 def discount(x, gamma):
     return scipy.signal.lfilter([1], [1, -gamma], x[::-1], axis=0)[::-1]
@@ -91,6 +92,10 @@ class BaseTrainer(object):
         self.episode_reward = 0
         self.summary_writer = None
         self.local_steps = 0
+        # trackers for the experience replay creation
+        self.last_action = np.zeros(self.action_size)
+        self.last_reward = 0
+        
     
     def _anneal_learning_rate(self, global_time_step):
         learning_rate = self.initial_learning_rate * (self.max_global_time_step - global_time_step) / self.max_global_time_step
@@ -124,119 +129,48 @@ class BaseTrainer(object):
                     continue
             if count == 5 or rollout.terminal:
                 rollout_full = True
-        logger.debug("pulled batch from rollout, length:{}".format(len(rollout.rewards)))
+        #logger.debug("pulled batch from rollout, length:{}".format(len(rollout.rewards)))
         return rollout
+        
+    def _print_log(self, global_t):
+            elapsed_time = time.time() - self.start_time
+            steps_per_sec = global_t / elapsed_time
+            logger.info("Performance : {} STEPS in {:.0f} sec. {:.0f} STEPS/sec. {:.2f}M STEPS/hour".format(
+            global_t,  elapsed_time, steps_per_sec, steps_per_sec * 3600 / 1000000.))
     
-    
-    #@TODO get this whole thing working
-    def _process_base(self, sess, global_t, runner, summary_writer, summary_op, score_input):
-        # [Base A3C]
-        states = []
-        last_action_rewards = []
-        actions = []
-        rewards = []
-        values = []
-
-        terminal_end = False
-
-        start_lstm_state = self.local_network.base_lstm_state_out
-
-        # t_max times loop
-        for _ in range(self.local_t_max):
-            # Prepare last action reward
-            last_action = self.environment.last_action
-            last_reward = self.environment.last_reward
-            last_action_reward = ExperienceFrame.concat_action_and_reward(last_action,
-                                                                          self.action_size,
-                                                                          last_reward)
+    def _add_batch_to_exp(self, batch):
+        for k in range(len(batch.si)):
+            last_action = self.last_action
+            last_reward = self.last_reward
             
-            pi_, value_ = self.local_network.run_base_policy_and_value(sess,
-                                                                       self.environment.last_state,
-                                                                       last_action_reward)
-            
-            
-            action = self.choose_action(pi_)
-
-            states.append(self.environment.last_state)
-            last_action_rewards.append(last_action_reward)
-            actions.append(action)
-            values.append(value_)
-            
-            if (self.thread_index == 0) and (self.local_t % LOG_INTERVAL == 0):
-                logger.info("localtime={}".format(self.local_t))
-
-            prev_state = self.environment.last_state
-
-            # Process game
-            new_state, reward, terminal, pixel_change = self.environment.process(action)
-            frame = ExperienceFrame(prev_state, reward, action, terminal, pixel_change,
-                                    last_action, last_reward)
-
-            # Store to experience
+            state = batch.si[k]
+            action = batch.a_r[k][:-1]
+            reward = batch.a_r[k][-1]
+            pixel_change = batch.pc[k]
+            if k == len(batch.si)-1 and batch.terminal:
+                terminal = True
+            else:
+                terminal = False
+            frame = ExperienceFrame(state, reward, action, terminal, pixel_change,
+                            last_action, last_reward)
             self.experience.add_frame(frame)
-
-            self.episode_reward += reward
-
-            rewards.append( reward )
-
-            self.local_t += 1
-
-            if terminal:
-              terminal_end = True
-              print("score={}".format(self.episode_reward))
-
-              self._record_score(sess, summary_writer, summary_op, score_input,
-                                 self.episode_reward, global_t)
-                
-              self.episode_reward = 0
-              self.environment.reset()
-              self.local_network.reset_state()
-              break
-
-        R = 0.0
-        if not terminal_end:
-          R = self.local_network.run_base_value(sess, new_state, frame.get_last_action_reward(self.action_size))
-
-        actions.reverse()
-        states.reverse()
-        rewards.reverse()
-        values.reverse()
-
-        batch_si = []
-        batch_a = []
-        batch_adv = []
-        batch_R = []
-
-        for(ai, ri, si, Vi) in zip(actions, rewards, states, values):
-          R = ri + self.gamma * R
-          adv = R - Vi
-          a = np.zeros([self.action_size])
-          a[ai] = 1.0
-
-          batch_si.append(si)
-          batch_a.append(a)
-          batch_adv.append(adv)
-          batch_R.append(R)
-
-        batch_si.reverse()
-        batch_a.reverse()
-        batch_adv.reverse()
-        batch_R.reverse()
-
-        return batch_si, last_action_rewards, batch_a, batch_adv, batch_R, start_lstm_state
-
+            self.last_action = action
+            self.last_reward = reward 
+    
     def process(self, sess, global_t, summary_writer, summary_op, score_input):
         # Copy weights from shared to local
         sess.run( self.sync )
         # get batch from process_rollout
         rollout = self.pull_batch_from_queue()
         batch = process_rollout(rollout, gamma=0.99, lambda_=1.0)
-        self.local_t += 1
-        if self.local_t % 100 == 0:
+        self.local_t += len(batch.si)
+        if self.local_t % LOG_INTERVAL == 0:
             logger.info("localtime={}".format(self.local_t))
-            logger.info("action={}".format(batch.a[:,-1]))
+            logger.info("action={}".format(batch.a[-1,:]))
             logger.info(" V={}".format(batch.r[-1]))
         cur_learning_rate = self._anneal_learning_rate(global_t)
+        if self.local_t % PERFORMANCE_LOG_INTERVAL == 0:
+            self._print_log(global_t)
 
         feed_dict = {
             self.local_network.base_input: batch.si,
@@ -252,8 +186,12 @@ class BaseTrainer(object):
         # Calculate gradients and copy them to global netowrk.
         sess.run( self.apply_gradients, feed_dict=feed_dict )
         
+        # add batch to experience replay
+        self._add_batch_to_exp(batch)
+        
         # Return advanced local step size
-        diff_local_t = self.local_t - start_local_t
+        #@TODO check what we are doing with the timekeeping
+        diff_local_t = self.local_t - global_t
         return diff_local_t
         
         
