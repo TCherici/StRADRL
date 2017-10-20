@@ -141,6 +141,7 @@ class BaseTrainer(object):
             global_t,  elapsed_time, steps_per_sec, steps_per_sec * 3600 / 1000000.))
     
     def _add_batch_to_exp(self, batch):
+        #logger.debug("is batch terminal? {}".format(batch.terminal))
         for k in range(len(batch.si)):
             last_action = self.last_action
             last_reward = self.last_reward
@@ -148,7 +149,9 @@ class BaseTrainer(object):
             state = batch.si[k]
             action = batch.a_r[k][:-1]
             reward = batch.a_r[k][-1]
+            self.episode_reward += reward
             pixel_change = batch.pc[k]
+            #logger.debug("k = {} of {} -- terminal = {}".format(k,len(batch.si), batch.terminal))
             if k == len(batch.si)-1 and batch.terminal:
                 terminal = True
             else:
@@ -158,6 +161,13 @@ class BaseTrainer(object):
             self.experience.add_frame(frame)
             self.last_action = action
             self.last_reward = reward
+            
+        if terminal:
+            total_ep_reward = self.episode_reward
+            self.episode_reward = 0
+            return total_ep_reward
+        else:
+            return None
             
     
     def process(self, sess, global_t, summary_writer, summary_op, score_input):
@@ -171,8 +181,6 @@ class BaseTrainer(object):
             logger.info("localtime={}".format(self.local_t))
             logger.info("action={}".format(batch.a[-1,:]))
             logger.info(" V={}".format(batch.r[-1]))
-            s = sess.run(summary_op, feed_dict={score_input:0})
-            summary_writer.add_summary(s, self.local_t)
         cur_learning_rate = self._anneal_learning_rate(global_t)
         if self.local_t % PERFORMANCE_LOG_INTERVAL == 0:
             self._print_log(global_t)
@@ -193,7 +201,11 @@ class BaseTrainer(object):
         sess.run( self.apply_gradients, feed_dict=feed_dict )
         
         # add batch to experience replay
-        self._add_batch_to_exp(batch)
+        total_ep_reward = self._add_batch_to_exp(batch)
+        if total_ep_reward is not None:
+            summary_str = sess.run(summary_op, feed_dict={score_input: total_ep_reward})
+            summary_writer.add_summary(summary_str, global_t)
+            summary_writer.flush()
         
         # Return advanced local step size
         #@TODO check what we are doing with the timekeeping
