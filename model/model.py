@@ -113,10 +113,17 @@ class UnrealModel(object):
             # Weights
             W_conv1, b_conv1 = self._conv_variable([8, 8, 3, 16],  "base_conv1")
             W_conv2, b_conv2 = self._conv_variable([4, 4, 16, 32], "base_conv2")
-
+            
             # Nodes
             h_conv1 = tf.nn.relu(self._conv2d(state_input, W_conv1, 4) + b_conv1) # stride=4
             h_conv2 = tf.nn.relu(self._conv2d(h_conv1,     W_conv2, 2) + b_conv2) # stride=2
+            
+            # tensorboard summaries
+            tf.summary.histogram("weights1", W_conv1)
+            tf.summary.histogram("weights2", W_conv2)
+            tf.summary.histogram("biases1", b_conv1)
+            tf.summary.histogram("biases2", b_conv2)
+            
             return h_conv2
   
   
@@ -149,6 +156,10 @@ class UnrealModel(object):
             
             lstm_outputs = tf.reshape(lstm_outputs, [-1,256])
             #(1,unroll_step,256) for back prop, (1,1,256) for forward prop.
+            
+            # tensorboard summaries
+            #tf.summary.histogram("lstm_state", lstm_state)
+            #tf.summary.histogram("lstm_outputs", lstm_outputs)
             return lstm_outputs, lstm_state
 
 

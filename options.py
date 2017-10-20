@@ -18,7 +18,7 @@ def get_options(option_type):
   tf.app.flags.DEFINE_boolean("use_value_replay", True, "whether to use value function replay")
   tf.app.flags.DEFINE_boolean("use_reward_prediction", True, "whether to use reward prediction")
 
-  tf.app.flags.DEFINE_string("checkpoint_dir", "/tmp/StRADRL_checkpoints", "checkpoint directory")
+  tf.app.flags.DEFINE_string("checkpoint_dir", "/tmp/StRADRL/checkpoints", "checkpoint directory")
 
   # For training
   if option_type == 'training':
@@ -27,7 +27,7 @@ def get_options(option_type):
     tf.app.flags.DEFINE_float("rmsp_alpha", 0.99, "decay parameter for rmsprop")
     tf.app.flags.DEFINE_float("rmsp_epsilon", 0.1, "epsilon parameter for rmsprop")
 
-    tf.app.flags.DEFINE_string("log_file", "/tmp/StRADRL_log/StRADRL_log", "log file directory")
+    tf.app.flags.DEFINE_string("log_file", "/tmp/StRADRL/StRADRL_log", "log file directory")
     tf.app.flags.DEFINE_float("initial_alpha_low", 1e-4, "log_uniform low limit for learning rate")
     tf.app.flags.DEFINE_float("initial_alpha_high", 5e-3, "log_uniform high limit for learning rate")
     tf.app.flags.DEFINE_float("initial_alpha_log_rate", 0.5, "log_uniform interpolate rate for learning rate")
@@ -37,7 +37,7 @@ def get_options(option_type):
     tf.app.flags.DEFINE_float("pixel_change_lambda", 0.05, "pixel change lambda") # 0.05, 0.01 ~ 0.1 for lab, 0.0001 ~ 0.01 for gym
     tf.app.flags.DEFINE_integer("experience_history_size", 2000, "experience replay buffer size")
     tf.app.flags.DEFINE_integer("max_time_step", 10 * 10**7, "max time steps")
-    tf.app.flags.DEFINE_integer("save_interval_step", 100 * 1000, "saving interval steps")
+    tf.app.flags.DEFINE_integer("save_interval_step", 1 * 1000, "saving interval steps")
     tf.app.flags.DEFINE_boolean("grad_norm_clip", 40.0, "gradient norm clipping")
 
   # For display

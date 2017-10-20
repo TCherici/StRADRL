@@ -11,7 +11,7 @@ from environment.environment import Environment
 
 logger = logging.getLogger('StRADRL.queuer')
 
-QUEUE_LENGTH = 15
+QUEUE_LENGTH = 30
 
 
 class PartialRollout(object):
@@ -78,7 +78,10 @@ class RunnerThread(threading.Thread):
         while True:
             self.queue.put(next(rollout_provider), timeout=600.0)
             #logger.debug("added rollout. Approx queue length:{}".format(self.queue.qsize()))
-
+            
+def choose_action(pi_values):
+    # take action with chance equal to distribution
+    return np.random.choice(range(len(pi_values)), p=pi_values)
         
 def env_runner(env, sess, policy, num_local_steps, summary_writer, render):
     """
@@ -98,8 +101,10 @@ def env_runner(env, sess, policy, num_local_steps, summary_writer, render):
         for _ in range(num_local_steps):
             fetched = policy.run_base_policy_and_value(sess, last_state, last_action_reward)
             action, value_, last_features = fetched[0], fetched[1], fetched[2:]
-            # argmax to convert from one-hot
-            state, reward, terminal, pixel_change = env.process(action.argmax())
+            
+
+            chosenaction = choose_action(action)
+            state, reward, terminal, pixel_change = env.process(chosenaction)
             if render:
                 env.render()
 

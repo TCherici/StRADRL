@@ -12,10 +12,13 @@ import sys
 import logging
 import six.moves.queue as queue
 from collections import namedtuple
+import distutils.version
 
 from environment.environment import Environment
 from model.model import UnrealModel
 from train.experience import Experience, ExperienceFrame
+
+use_tf12_api = distutils.version.LooseVersion(tf.VERSION) >= distutils.version.LooseVersion('0.12.0')
 
 logger = logging.getLogger("StRADRL.base_trainer")
 
@@ -90,8 +93,6 @@ class BaseTrainer(object):
         self.local_t = 0
         self.initial_learning_rate = initial_learning_rate
         self.episode_reward = 0
-        self.summary_writer = None
-        self.local_steps = 0
         # trackers for the experience replay creation
         self.last_action = np.zeros(self.action_size)
         self.last_reward = 0
@@ -106,8 +107,9 @@ class BaseTrainer(object):
     def choose_action(self, pi_values):
         return np.random.choice(range(len(pi_values)), p=pi_values)
     
-    def set_start_time(self, start_time):
+    def set_start_time(self, start_time, global_t):
         self.start_time = start_time
+        self.local_t = global_t
         
     def pull_batch_from_queue(self):
         """
@@ -155,7 +157,8 @@ class BaseTrainer(object):
                             last_action, last_reward)
             self.experience.add_frame(frame)
             self.last_action = action
-            self.last_reward = reward 
+            self.last_reward = reward
+            
     
     def process(self, sess, global_t, summary_writer, summary_op, score_input):
         # Copy weights from shared to local
@@ -168,9 +171,12 @@ class BaseTrainer(object):
             logger.info("localtime={}".format(self.local_t))
             logger.info("action={}".format(batch.a[-1,:]))
             logger.info(" V={}".format(batch.r[-1]))
+            s = sess.run(summary_op, feed_dict={score_input:0})
+            summary_writer.add_summary(s, self.local_t)
         cur_learning_rate = self._anneal_learning_rate(global_t)
         if self.local_t % PERFORMANCE_LOG_INTERVAL == 0:
             self._print_log(global_t)
+        
 
         feed_dict = {
             self.local_network.base_input: batch.si,

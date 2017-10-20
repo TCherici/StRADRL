@@ -23,7 +23,7 @@ from queuer import RunnerThread
 from options import get_options
 
 logger = logging.getLogger('StRADRL.newmain')
-LOG_DIR = u'./temp/run_id/'
+LOG_DIR = u'/home/tcherici/Documents/lab/StRADRL/temp/'
 LOG_LEVEL = 'debug'
 
 LOCAL_ENV_STEPS = 20
@@ -45,7 +45,7 @@ class Application(object):
         trainer = self.base_trainer
         
         # set start_time
-        trainer.set_start_time(self.start_time)
+        trainer.set_start_time(self.start_time, self.global_t)
       
         while True:
             if self.stop_requested:
@@ -58,6 +58,8 @@ class Application(object):
                 break
             if self.global_t > self.next_save_steps:
                 # Save checkpoint
+                logger.debug(self.global_t)
+                logger.debug(self.next_save_steps)
                 self.save()
             
             diff_global_t = trainer.process(self.sess,
@@ -140,8 +142,8 @@ class Application(object):
         tf.summary.scalar("score", self.score_input)
 
         self.summary_op = tf.summary.merge_all()
-        self.summary_writer = tf.summary.FileWriter(flags.log_file,
-                                                    self.sess.graph)
+        self.summary_writer = tf.summary.FileWriter(flags.log_file)
+        self.summary_writer.add_graph(self.sess.graph)
 
         # init or load checkpoint with saver
         self.saver = tf.train.Saver(self.global_network.get_vars())
@@ -149,17 +151,18 @@ class Application(object):
         checkpoint = tf.train.get_checkpoint_state(flags.checkpoint_dir)
         if checkpoint and checkpoint.model_checkpoint_path:
             self.saver.restore(self.sess, checkpoint.model_checkpoint_path)
-            logger.info("checkpoint loaded:", checkpoint.model_checkpoint_path)
+            checkpointpath = checkpoint.model_checkpoint_path.replace("/", "\\")
+            logger.info("checkpoint loaded: {}".format(checkpointpath))
             tokens = checkpoint.model_checkpoint_path.split("-")
             # set global step
             self.global_t = int(tokens[1])
-            logger.info(">>> global step set: ", self.global_t)
+            logger.info(">>> global step set: {}".format(self.global_t))
             # set wall time
             wall_t_fname = flags.checkpoint_dir + '/' + 'wall_t.' + str(self.global_t)
             with open(wall_t_fname, 'r') as f:
                 self.wall_t = float(f.read())
                 self.next_save_steps = (self.global_t + flags.save_interval_step) // flags.save_interval_step * flags.save_interval_step
-        
+                logger.debug("next save steps:{}".format(self.next_save_steps))
         else:
             logger.info("Could not find old checkpoint")
             # set wall time
@@ -185,14 +188,10 @@ class Application(object):
 
     def save(self):
         """ Save checkpoint. 
-        Called from therad-0.
+        Called from base_trainer.
         """
         self.stop_requested = True
-      
-        # Wait for all other threads to stop
-        for (i, t) in enumerate(self.train_threads):
-            if i != 0:
-                t.join()
+        
       
         # Save
         if not os.path.exists(flags.checkpoint_dir):
@@ -223,6 +222,6 @@ def main(argv):
 
 if __name__ == '__main__':
     run_id = generate_id()
-    logger = logger_init(LOG_DIR, run_id, loglevel=LOG_LEVEL)
+    logger = logger_init(LOG_DIR+run_id+'/', run_id, loglevel=LOG_LEVEL)
     tf.app.run()
     
