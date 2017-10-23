@@ -127,7 +127,7 @@ def env_runner(env, sess, policy, num_local_steps, summary_writer, render):
             
             #@TODO investigate timestep_limit
             #timestep_limit = env.spec.tags.get('wrapper_config.TimeLimit.max_episode_steps')
-            timestep_limit = 1000
+            timestep_limit = 100000
             if terminal or length >= timestep_limit:
                 terminal_end = True
                 # the if condition below has been disabled because deepmind lab has no metadata
@@ -135,7 +135,7 @@ def env_runner(env, sess, policy, num_local_steps, summary_writer, render):
                 last_state, last_action_reward = env.reset()
                 policy.reset_state()
                 last_features = policy.base_lstm_state_out
-                logger.info("Episode finished. Sum of rewards: %d. Length: %d" % (rewards, length))
+                logger.info("Episode finished (terminal:%s). Sum of rewards: %d. Length: %d" % (terminal,rewards, length))
                 length = 0
                 rewards = 0
                 break

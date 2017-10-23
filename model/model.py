@@ -30,37 +30,41 @@ class UnrealModel(object):
     UNREAL algorithm network model.
     """
     def __init__(self,
-               action_size,
-               thread_index, # -1 for global
-               use_pixel_change,
-               use_value_replay,
-               use_reward_prediction,
-               pixel_change_lambda,
-               entropy_beta,
-               device,
-               for_display=False):
+                action_size,
+                thread_index, # -1 for global
+                entropy_beta,
+                device,
+                use_pixel_change=False,
+                use_value_replay=False,
+                use_reward_prediction=False,
+                pixel_change_lambda=0.,
+                for_display=False,
+                use_base=True):
         self._device = device
         self._action_size = action_size
         self._thread_index = thread_index
         self._use_pixel_change = use_pixel_change
         self._use_value_replay = use_value_replay
         self._use_reward_prediction = use_reward_prediction
+        self._use_base = use_base
         self._pixel_change_lambda = pixel_change_lambda
         self._entropy_beta = entropy_beta
         self._create_network(for_display)
+
         
     def get_initial_features(self):
         return self.state_init
     
     def _create_network(self, for_display):
-        logger.debug("creating network")
-        scope_name = "net_{0}".format(self._thread_index)
+        scope_name = "net_{}".format(self._thread_index)
+        logger.debug("creating network -- scope_name:{} -- device:{}".format(scope_name,self._device))
         with tf.device(self._device), tf.variable_scope(scope_name) as scope:
             # lstm
             self.lstm_cell = tf.contrib.rnn.BasicLSTMCell(256, state_is_tuple=True)
               
             # [base A3C network]
-            self._create_base_network()
+            if self._use_base:
+                self._create_base_network()
 
             # [Pixel change network]
             if self._use_pixel_change:
@@ -202,7 +206,9 @@ class UnrealModel(object):
                                                    pc_initial_lstm_state,
                                                    reuse=True)    
         self.pc_q, self.pc_q_max = self._pc_deconv_layers(pc_lstm_outputs)
-
+    
+    
+    #@TODO temporal coherence
     def _create_tc_network(self):
         # State (Image input)
         self.tc_input = tf.placeholder("float",[None, 84, 84, 3])
@@ -356,7 +362,10 @@ class UnrealModel(object):
     
     def prepare_loss(self):
         with tf.device(self._device):
-            loss = self._base_loss()
+            loss = tf.zeros([1])
+            if self._use_base:
+                base_loss = self._base_loss()
+                loss = loss + base_loss
       
             if self._use_pixel_change:
                 pc_loss = self._pc_loss()
@@ -369,7 +378,7 @@ class UnrealModel(object):
             if self._use_reward_prediction:
                 rp_loss = self._rp_loss()
                 loss = loss + rp_loss
-              
+            
             self.total_loss = loss
 
 

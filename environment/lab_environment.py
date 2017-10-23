@@ -22,7 +22,7 @@ def worker(conn, env_name):
     level,
     ['RGB_INTERLACED'],
     config={
-      'fps': str(60),
+      'fps': str(120),
       'width': str(84),
       'height': str(84)
     })
@@ -33,10 +33,13 @@ def worker(conn, env_name):
 
     if command == COMMAND_RESET:
       env.reset()
+      logger.warn("episode was reset")
       obs = env.observations()['RGB_INTERLACED']
       conn.send(obs)
     elif command == COMMAND_ACTION:
+      #logger.debug(arg)
       reward = env.step(arg, num_steps=4)
+      #logger.debug(env.is_running())
       terminal = not env.is_running()
       if not terminal:
         obs = env.observations()['RGB_INTERLACED']

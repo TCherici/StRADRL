@@ -3,10 +3,12 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import logging
 import tensorflow as tf
 from tensorflow.python.training import training_ops
 from tensorflow.python.training import slot_creator
 
+logger = logging.getLogger("StRADRL.rmsprop_applier")
 
 class RMSPropApplier(object):
 
@@ -91,7 +93,12 @@ class RMSPropApplier(object):
       self._epsilon_tensor,
       grad,
       use_locking=False).op
-
+  
+  def _fix_gradients(self, grads, var_list):
+    return [vargrad if vargrad is not None else tf.zeros_like(var)\
+            for var, vargrad in zip(var_list, grads)]
+  
+  
   def minimize_local(self, loss, global_var_list, local_var_list):
     """
     minimize loss and apply gradients to global vars.
@@ -103,6 +110,8 @@ class RMSPropApplier(object):
         gate_gradients=False,
         aggregation_method=None,
         colocate_gradients_with_ops=False)
+      local_gradients = self._fix_gradients(local_gradients, var_refs)
+      logger.debug("local_grads:{}".format(local_gradients))  
       return self._apply_gradients(global_var_list, local_gradients)
 
   # Apply gradients to var.
@@ -112,7 +121,7 @@ class RMSPropApplier(object):
     with tf.control_dependencies(None):
       self._create_slots(global_var_list)
 
-    # global gradinet norm clipping
+    # global gradient norm clipping
     local_grad_list, _ =  tf.clip_by_global_norm(local_grad_list, self._clip_norm)
 
     with tf.name_scope(name, self._name,[]) as name:

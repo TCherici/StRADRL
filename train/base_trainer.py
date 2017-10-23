@@ -12,13 +12,10 @@ import sys
 import logging
 import six.moves.queue as queue
 from collections import namedtuple
-import distutils.version
 
 from environment.environment import Environment
 from model.model import UnrealModel
 from train.experience import Experience, ExperienceFrame
-
-use_tf12_api = distutils.version.LooseVersion(tf.VERSION) >= distutils.version.LooseVersion('0.12.0')
 
 logger = logging.getLogger("StRADRL.base_trainer")
 
@@ -61,25 +58,18 @@ class BaseTrainer(object):
                env_type,
                env_name,
                entropy_beta,
-               local_t_max,
                gamma,
-               experience_history_size,
+               experience,
                max_global_time_step,
                device):
         self.runner = runner
         self.learning_rate_input = learning_rate_input
         self.env_type = env_type
         self.env_name = env_name
-        self.local_t_max = local_t_max
         self.gamma = gamma
-        self.experience_history_size = experience_history_size
         self.max_global_time_step = max_global_time_step
         self.action_size = Environment.get_action_size(env_type, env_name)
         self.local_network = UnrealModel(self.action_size,
-                                         0,
-                                         False,
-                                         False,
-                                         False,
                                          0,
                                          entropy_beta,
                                          device)
@@ -89,7 +79,7 @@ class BaseTrainer(object):
                                                            global_network.get_vars(),
                                                            self.local_network.get_vars())
         self.sync = self.local_network.sync_from(global_network)
-        self.experience = Experience(self.experience_history_size)
+        self.experience = experience
         self.local_t = 0
         self.initial_learning_rate = initial_learning_rate
         self.episode_reward = 0
@@ -184,7 +174,6 @@ class BaseTrainer(object):
         cur_learning_rate = self._anneal_learning_rate(global_t)
         if self.local_t % PERFORMANCE_LOG_INTERVAL == 0:
             self._print_log(global_t)
-        
 
         feed_dict = {
             self.local_network.base_input: batch.si,
@@ -212,6 +201,4 @@ class BaseTrainer(object):
         diff_local_t = self.local_t - global_t
         return diff_local_t
         
-        
-        
-        
+
