@@ -29,13 +29,11 @@ LOG_DIR = u'/home/tcherici/Documents/lab/StRADRL/temp/'
 LOG_LEVEL = 'debug'
 NUM_AUX_WORKERS = 3
 
-USE_GPU = True
+USE_GPU = False
 visualise = False
 
 # get command line args
 flags = get_options("training")
-
-
 
 class Application(object):
     def __init__(self):
@@ -75,8 +73,10 @@ class Application(object):
         """ Train routine for aux_trainer. """
         
         trainer = self.aux_trainers[aux_index]
-      
+        
         while True:
+            if self.global_t < 1000:
+                continue
             if self.stop_requested:
                 break
             if self.terminate_requested:
@@ -107,12 +107,14 @@ class Application(object):
         logger.debug("loading global model...")
         self.global_network = UnrealModel(action_size,
                                           -1,
+                                          flags.entropy_beta,
+                                          device,
                                           flags.use_pixel_change,
                                           flags.use_value_replay,
                                           flags.use_reward_prediction,
+                                          flags.use_temporal_coherence,
                                           flags.pixel_change_lambda,
-                                          flags.entropy_beta,
-                                          device)
+                                          flags.temporal_coherence_lambda)
         logger.debug("done loading global model")
         learning_rate_input = tf.placeholder("float")
         
@@ -156,10 +158,12 @@ class Application(object):
         for k in range(NUM_AUX_WORKERS):
             self.aux_trainers.append(AuxTrainer(self.global_network,
                                                 k+1, #-1 is global, 0 is base
-                                                flags.use_pixel_change, #use_pixel_change
-                                                flags.use_value_replay, #use_value_replay,
-                                                flags.use_reward_prediction, #use_reward_prediction,
+                                                flags.use_pixel_change, 
+                                                flags.use_value_replay,
+                                                flags.use_reward_prediction,
+                                                flags.use_temporal_coherence,
                                                 flags.pixel_change_lambda,
+                                                flags.temporal_coherence_lambda,
                                                 initial_learning_rate,
                                                 learning_rate_input,
                                                 grad_applier,
@@ -229,7 +233,7 @@ class Application(object):
         for k in range(NUM_AUX_WORKERS):
             self.aux_train_threads.append(threading.Thread(target=self.aux_train_function, args=(k,)))
             self.aux_train_threads[k].start()
-        
+            
         logger.debug(threading.enumerate())
 
         logger.info('Press Ctrl+C to stop')

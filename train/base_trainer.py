@@ -84,7 +84,7 @@ class BaseTrainer(object):
         self.initial_learning_rate = initial_learning_rate
         self.episode_reward = 0
         # trackers for the experience replay creation
-        self.last_action = np.zeros(self.action_size)
+        self.last_action = 0#np.zeros(self.action_size)
         self.last_reward = 0
         
     
@@ -137,7 +137,7 @@ class BaseTrainer(object):
             last_reward = self.last_reward
             
             state = batch.si[k]
-            action = batch.a_r[k][:-1]
+            action = np.argmax(batch.a_r[k][:-1])
             reward = batch.a_r[k][-1]
             self.episode_reward += reward
             pixel_change = batch.pc[k]

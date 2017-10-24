@@ -110,8 +110,8 @@ class RMSPropApplier(object):
         gate_gradients=False,
         aggregation_method=None,
         colocate_gradients_with_ops=False)
-      local_gradients = self._fix_gradients(local_gradients, var_refs)
-      logger.debug("local_grads:{}".format(local_gradients))  
+      #local_gradients = self._fix_gradients(local_gradients, var_refs)
+      #logger.debug("local_grads:{}".format(local_gradients))  
       return self._apply_gradients(global_var_list, local_gradients)
 
   # Apply gradients to var.

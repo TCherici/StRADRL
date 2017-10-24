@@ -102,8 +102,10 @@ def env_runner(env, sess, policy, num_local_steps, summary_writer, render):
             fetched = policy.run_base_policy_and_value(sess, last_state, last_action_reward)
             action, value_, last_features = fetched[0], fetched[1], fetched[2:]
             
-
-            chosenaction = choose_action(action)
+            #@TODO decide if argmax or probability, if latter fix experience replay selection
+            #chosenaction = choose_action(action)
+            chosenaction = np.argmax(action)
+            
             state, reward, terminal, pixel_change = env.process(chosenaction)
             if render:
                 env.render()

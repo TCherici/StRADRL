@@ -26,7 +26,9 @@ class AuxTrainer(object):
                 use_pixel_change,
                 use_value_replay,
                 use_reward_prediction,
+                use_temporal_coherence,
                 pixel_change_lambda,
+                temporal_coherence_lambda,
                 initial_learning_rate,
                 learning_rate_input,
                 grad_applier,
@@ -42,7 +44,8 @@ class AuxTrainer(object):
                 
         self.use_pixel_change = use_pixel_change   
         self.use_value_replay = use_value_replay
-        self.use_reward_prediction = use_reward_prediction          
+        self.use_reward_prediction = use_reward_prediction  
+        self.use_temporal_coherence = use_temporal_coherence        
         self.learning_rate_input = learning_rate_input
         self.env_type = env_type
         self.env_name = env_name
@@ -59,7 +62,9 @@ class AuxTrainer(object):
                                          use_pixel_change,
                                          use_value_replay,
                                          use_reward_prediction,
+                                         use_temporal_coherence,
                                          pixel_change_lambda,
+                                         temporal_coherence_lambda,
                                          use_base=False)
         self.local_network.prepare_loss()
         
@@ -172,11 +177,23 @@ class AuxTrainer(object):
           rp_c[2] = 1.0 # negative
         batch_rp_c.append(rp_c)
         return batch_rp_si, batch_rp_c
-
+        
+    def _process_tc(self):
+        # [temporal coherence]
+        tc_experience_frames = self.experience.sample_sequence(self.local_t_max+1)
+        # Revese sequence to calculate from the last
+        batch_tc_input1 = []
+        batch_tc_input2 = []
+        for frame in tc_experience_frames[1:]:
+            batch_tc_input1.append(tc_experience_frames[frame-1])
+            batch_tc_input2.append(tc_experience_frames[frame])
+        return batch_tc_input1, batch_tc_input2
 
     def process(self, sess, global_t):
 
         cur_learning_rate = self._anneal_learning_rate(global_t)
+        if global_t % 1000 == 0:
+            logger.debug("current learning rate:{}".format(cur_learning_rate))
 
         # Copy weights from shared to local
         sess.run( self.sync )
@@ -220,6 +237,14 @@ class AuxTrainer(object):
                 self.learning_rate_input: cur_learning_rate
             }
             feed_dict.update(rp_feed_dict)
+        
+        # [Temporal coherence]
+        if self.use_temporal_coherence:
+            batch_tc_input1, batch_tc_input2 = self._process_tc()
+            tc_feed_dict = {
+                self.local_network.tc_input1: batch_tc_input1,
+                self.local_network.tc_input2: batch_tc_input2
+            }
 
         # Calculate gradients and copy them to global netowrk.
         sess.run( self.apply_gradients, feed_dict=feed_dict )
