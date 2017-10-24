@@ -1,0 +1,10 @@
+
+make all gradients work on the aux_trainer
+
+change runner to use local network
+
+
+
+switch to multiprocessing?
+
+kEngineTimePerExternalTime

@@ -73,12 +73,10 @@ class Experience(object):
 
       cut_frame_index = self._top_frame_index + 3
       # Cut frame if its index is lower than cut_frame_index.
-      if len(self._zero_reward_indices) > 0 and \
-         self._zero_reward_indices[0] < cut_frame_index:
+      if len(self._zero_reward_indices) > 0 and self._zero_reward_indices[0] < cut_frame_index:
         self._zero_reward_indices.popleft()
         
-      if len(self._non_zero_reward_indices) > 0 and \
-         self._non_zero_reward_indices[0] < cut_frame_index:
+      if len(self._non_zero_reward_indices) > 0 and self._non_zero_reward_indices[0] < cut_frame_index:
         self._non_zero_reward_indices.popleft()
 
 
@@ -89,8 +87,8 @@ class Experience(object):
   def sample_sequence(self, sequence_size):
     # -1 for the case if start pos is the terminated frame.
     # (Then +1 not to start from terminated frame.)
-    start_pos = np.random.randint(0, self._history_size - sequence_size -1)
-
+    start_pos = np.random.randint(0, len(self._frames) - sequence_size -1)
+    #logger.debug("length frames:{}".format(len(self._frames)))
     if self._frames[start_pos].terminal:
       start_pos += 1
       # Assuming that there are no successive terminal frames.

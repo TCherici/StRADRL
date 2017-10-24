@@ -19,6 +19,10 @@ from train.experience import Experience, ExperienceFrame
 
 logger = logging.getLogger("StRADRL.aux_trainer")
 
+
+
+Batch = namedtuple("Batch", ["si", "a", "a_r", "adv", "r", "terminal", "features", "pc"])
+
 class AuxTrainer(object):
     def __init__(self,
                 global_network,
@@ -65,10 +69,10 @@ class AuxTrainer(object):
                                          use_temporal_coherence,
                                          pixel_change_lambda,
                                          temporal_coherence_lambda,
-                                         use_base=False)
+                                         use_base=True)
         self.local_network.prepare_loss()
         
-        logger.debug("ln.total_loss:{}".format(self.local_network.total_loss))
+        #logger.debug("ln.total_loss:{}".format(self.local_network.total_loss))
         
         self.apply_gradients = grad_applier.minimize_local(self.local_network.total_loss,
                                                            global_network.get_vars(),
@@ -86,6 +90,54 @@ class AuxTrainer(object):
         if learning_rate < 0.0:
             learning_rate = 0.0
         return learning_rate
+        
+    def discount(x, gamma):
+        return scipy.signal.lfilter([1], [1, -gamma], x[::-1], axis=0)[::-1]
+        
+    def _process_base(self, sess, policy, gamma):
+        # base A3C from experience replay
+        experience_frames = self.experience.sample_sequence(self.local_t_max+1)
+        batch_si = []
+        batch_a = []
+        rewards = []
+        action_reward = []
+        batch_features = []
+        values = []
+        last_state = experience_frames[0].state
+        last_action_reward = experience_frames[0].action + [experience_frames[0].reward]
+        for frame in range(1,self.local_t_max+1):
+            state = experience_frames[frame].state
+            batch_si.append(state)
+            action = experience_frames[frame].action
+            batch_a.append(action)
+            reward = experience_frames[frame].reward
+            action_reward.append(action+[reward])
+            rewards.append(reward)
+            _, value, features = policy.run_base_policy_and_value(sess, last_state, last_action_reward)
+            batch_features.append(features)
+            values.append(value)
+            last_state = state
+            last_action_reward = action_reward[-1]
+
+        if not experience_frames[-1].terminal:
+           r = policy.run_base_value(sess, last_state, last_action_reward)
+        else:
+           r = 0.
+                
+        vpred_t = np.asarray(values + [r])
+            
+        rewards_plus_v = np.asarray(rewards + [values])
+        logging.debug(rewards_plus_v.shape)
+        batch_r = discount(rewards_plus_v, gamma)[:-1]
+        delta_t = rewards + gamma * vpred_t[1:] - vpred_t[:-1]
+        # this formula for the advantage comes "Generalized Advantage Estimation":
+        # https://arxiv.org/abs/1506.02438
+        batch_adv = discount(delta_t, gamma * lambda_)
+
+        
+        start_features = batch_features[0]
+
+        return Batch(batch_si, batch_a, action_reward, batch_adv, batch_r, experience_frames[-1].terminal, start_features)
         
     def _process_pc(self, sess):
         # [pixel change]
@@ -184,21 +236,31 @@ class AuxTrainer(object):
         # Revese sequence to calculate from the last
         batch_tc_input1 = []
         batch_tc_input2 = []
-        for frame in tc_experience_frames[1:]:
-            batch_tc_input1.append(tc_experience_frames[frame-1])
-            batch_tc_input2.append(tc_experience_frames[frame])
+        for frame in range(len(tc_experience_frames)):
+            batch_tc_input1.append(tc_experience_frames[frame].state)
+            batch_tc_input2.append(tc_experience_frames[frame].state)
         return batch_tc_input1, batch_tc_input2
 
     def process(self, sess, global_t):
 
         cur_learning_rate = self._anneal_learning_rate(global_t)
-        if global_t % 1000 == 0:
-            logger.debug("current learning rate:{}".format(cur_learning_rate))
-
-        # Copy weights from shared to local
-        sess.run( self.sync )
+        if global_t % 10000 == 0:
+            logger.debug("Syncing to global net -- current learning rate:{}".format(cur_learning_rate))
+            # Copy weights from shared to local
+            sess.run( self.sync )
+            
+        batch = self._process_base(sess, self.local_network, self.gamma)
         
-        feed_dict = {}
+        feed_dict = {
+                self.local_network.base_input: batch.si,
+                self.local_network.base_last_action_reward_input: batch.a_r,
+                self.local_network.base_a: batch.a,
+                self.local_network.base_adv: batch.adv,
+                self.local_network.base_r: batch.r,
+                self.local_network.base_initial_lstm_state: batch.features,
+                # [common]
+                self.learning_rate_input: cur_learning_rate
+        }
         
         # [Pixel change]
         if self.use_pixel_change:
