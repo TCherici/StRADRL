@@ -1,5 +1,5 @@
 #!/bin/sh
 
-rm /tmp/StRADRL_checkpoints/*
-rm /tmp/StRADRL_log/StRADRL_log/*
+rm /tmp/StRADRL/checkpoints/*
+rm /tmp/StRADRL/StRADRL_log/*
 

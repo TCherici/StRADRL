@@ -11,7 +11,7 @@ from environment.environment import Environment
 
 logger = logging.getLogger('StRADRL.queuer')
 
-QUEUE_LENGTH = 15
+QUEUE_LENGTH = 30
 
 
 class PartialRollout(object):
@@ -78,7 +78,10 @@ class RunnerThread(threading.Thread):
         while True:
             self.queue.put(next(rollout_provider), timeout=600.0)
             #logger.debug("added rollout. Approx queue length:{}".format(self.queue.qsize()))
-
+            
+def choose_action(pi_values):
+    # take action with chance equal to distribution
+    return np.random.choice(range(len(pi_values)), p=pi_values)
         
 def env_runner(env, sess, policy, num_local_steps, summary_writer, render):
     """
@@ -98,8 +101,12 @@ def env_runner(env, sess, policy, num_local_steps, summary_writer, render):
         for _ in range(num_local_steps):
             fetched = policy.run_base_policy_and_value(sess, last_state, last_action_reward)
             action, value_, last_features = fetched[0], fetched[1], fetched[2:]
-            # argmax to convert from one-hot
-            state, reward, terminal, pixel_change = env.process(action.argmax())
+            
+            #@TODO decide if argmax or probability, if latter fix experience replay selection
+            #chosenaction = choose_action(action)
+            chosenaction = np.argmax(action)
+            
+            state, reward, terminal, pixel_change = env.process(chosenaction)
             if render:
                 env.render()
 
@@ -122,7 +129,7 @@ def env_runner(env, sess, policy, num_local_steps, summary_writer, render):
             
             #@TODO investigate timestep_limit
             #timestep_limit = env.spec.tags.get('wrapper_config.TimeLimit.max_episode_steps')
-            timestep_limit = 1000
+            timestep_limit = 100000
             if terminal or length >= timestep_limit:
                 terminal_end = True
                 # the if condition below has been disabled because deepmind lab has no metadata
@@ -130,7 +137,7 @@ def env_runner(env, sess, policy, num_local_steps, summary_writer, render):
                 last_state, last_action_reward = env.reset()
                 policy.reset_state()
                 last_features = policy.base_lstm_state_out
-                logger.info("Episode finished. Sum of rewards: %d. Length: %d" % (rewards, length))
+                logger.info("Episode finished (terminal:%s). Sum of rewards: %d. Length: %d" % (terminal,rewards, length))
                 length = 0
                 rewards = 0
                 break

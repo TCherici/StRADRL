@@ -58,25 +58,18 @@ class BaseTrainer(object):
                env_type,
                env_name,
                entropy_beta,
-               local_t_max,
                gamma,
-               experience_history_size,
+               experience,
                max_global_time_step,
                device):
         self.runner = runner
         self.learning_rate_input = learning_rate_input
         self.env_type = env_type
         self.env_name = env_name
-        self.local_t_max = local_t_max
         self.gamma = gamma
-        self.experience_history_size = experience_history_size
         self.max_global_time_step = max_global_time_step
         self.action_size = Environment.get_action_size(env_type, env_name)
         self.local_network = UnrealModel(self.action_size,
-                                         0,
-                                         False,
-                                         False,
-                                         False,
                                          0,
                                          entropy_beta,
                                          device)
@@ -86,14 +79,12 @@ class BaseTrainer(object):
                                                            global_network.get_vars(),
                                                            self.local_network.get_vars())
         self.sync = self.local_network.sync_from(global_network)
-        self.experience = Experience(self.experience_history_size)
+        self.experience = experience
         self.local_t = 0
         self.initial_learning_rate = initial_learning_rate
         self.episode_reward = 0
-        self.summary_writer = None
-        self.local_steps = 0
         # trackers for the experience replay creation
-        self.last_action = np.zeros(self.action_size)
+        self.last_action = 0#np.zeros(self.action_size)
         self.last_reward = 0
         
     
@@ -106,8 +97,9 @@ class BaseTrainer(object):
     def choose_action(self, pi_values):
         return np.random.choice(range(len(pi_values)), p=pi_values)
     
-    def set_start_time(self, start_time):
+    def set_start_time(self, start_time, global_t):
         self.start_time = start_time
+        self.local_t = global_t
         
     def pull_batch_from_queue(self):
         """
@@ -139,14 +131,17 @@ class BaseTrainer(object):
             global_t,  elapsed_time, steps_per_sec, steps_per_sec * 3600 / 1000000.))
     
     def _add_batch_to_exp(self, batch):
+        #logger.debug("is batch terminal? {}".format(batch.terminal))
         for k in range(len(batch.si)):
             last_action = self.last_action
             last_reward = self.last_reward
             
             state = batch.si[k]
-            action = batch.a_r[k][:-1]
+            action = np.argmax(batch.a_r[k][:-1])
             reward = batch.a_r[k][-1]
+            self.episode_reward += reward
             pixel_change = batch.pc[k]
+            #logger.debug("k = {} of {} -- terminal = {}".format(k,len(batch.si), batch.terminal))
             if k == len(batch.si)-1 and batch.terminal:
                 terminal = True
             else:
@@ -155,7 +150,15 @@ class BaseTrainer(object):
                             last_action, last_reward)
             self.experience.add_frame(frame)
             self.last_action = action
-            self.last_reward = reward 
+            self.last_reward = reward
+            
+        if terminal:
+            total_ep_reward = self.episode_reward
+            self.episode_reward = 0
+            return total_ep_reward
+        else:
+            return None
+            
     
     def process(self, sess, global_t, summary_writer, summary_op, score_input):
         # Copy weights from shared to local
@@ -187,13 +190,15 @@ class BaseTrainer(object):
         sess.run( self.apply_gradients, feed_dict=feed_dict )
         
         # add batch to experience replay
-        self._add_batch_to_exp(batch)
+        total_ep_reward = self._add_batch_to_exp(batch)
+        if total_ep_reward is not None:
+            summary_str = sess.run(summary_op, feed_dict={score_input: total_ep_reward})
+            summary_writer.add_summary(summary_str, global_t)
+            summary_writer.flush()
         
         # Return advanced local step size
         #@TODO check what we are doing with the timekeeping
         diff_local_t = self.local_t - global_t
         return diff_local_t
         
-        
-        
-        
+

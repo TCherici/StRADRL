@@ -3,9 +3,6 @@ package(default_visibility = ["//visibility:public"])
 env_args = [
   "--env_type lab",
   "--env_name nav_maze_static_01",
-  "--use_pixel_change False",
-  "--use_value_replay False",
-  "--use_reward_prediction False"
 ]
 
 py_binary(

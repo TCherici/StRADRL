@@ -17,23 +17,23 @@ import logging
 from helper import logger_init, generate_id
 from environment.environment import Environment
 from model.model import UnrealModel
+from train.experience import Experience
 from train.rmsprop_applier import RMSPropApplier
 from train.base_trainer import BaseTrainer
+from train.aux_trainer import AuxTrainer
 from queuer import RunnerThread
 from options import get_options
 
 logger = logging.getLogger('StRADRL.newmain')
-LOG_DIR = u'./temp/run_id/'
+LOG_DIR = u'/home/tcherici/Documents/lab/StRADRL/temp/'
 LOG_LEVEL = 'debug'
+NUM_AUX_WORKERS = 3
 
-LOCAL_ENV_STEPS = 20
-USE_GPU = True
+USE_GPU = False
 visualise = False
 
 # get command line args
 flags = get_options("training")
-
-
 
 class Application(object):
     def __init__(self):
@@ -45,7 +45,7 @@ class Application(object):
         trainer = self.base_trainer
         
         # set start_time
-        trainer.set_start_time(self.start_time)
+        trainer.set_start_time(self.start_time, self.global_t)
       
         while True:
             if self.stop_requested:
@@ -58,6 +58,8 @@ class Application(object):
                 break
             if self.global_t > self.next_save_steps:
                 # Save checkpoint
+                logger.debug("Steps:{}".format(self.global_t))
+                logger.debug(self.next_save_steps)
                 self.save()
             
             diff_global_t = trainer.process(self.sess,
@@ -66,6 +68,26 @@ class Application(object):
                                           self.summary_op,
                                           self.score_input)
             self.global_t += diff_global_t
+            
+    def aux_train_function(self, aux_index):
+        """ Train routine for aux_trainer. """
+        
+        trainer = self.aux_trainers[aux_index]
+        
+        while True:
+            if self.global_t < 1000:
+                continue
+            if self.stop_requested:
+                break
+            if self.terminate_requested:
+                trainer.stop()
+                break
+            if self.global_t > flags.max_time_step:
+                trainer.stop()
+                break
+            
+            trainer.process(self.sess,
+                            self.global_t)
             
             
     def run(self):
@@ -85,12 +107,14 @@ class Application(object):
         logger.debug("loading global model...")
         self.global_network = UnrealModel(action_size,
                                           -1,
+                                          flags.entropy_beta,
+                                          device,
                                           flags.use_pixel_change,
                                           flags.use_value_replay,
                                           flags.use_reward_prediction,
+                                          flags.use_temporal_coherence,
                                           flags.pixel_change_lambda,
-                                          flags.entropy_beta,
-                                          device)
+                                          flags.temporal_coherence_lambda)
         logger.debug("done loading global model")
         learning_rate_input = tf.placeholder("float")
         
@@ -108,8 +132,11 @@ class Application(object):
         logger.debug("done loading environment")
         
         # Setup runner
-        self.runner = RunnerThread(self.environment, self.global_network, LOCAL_ENV_STEPS, visualise)
+        self.runner = RunnerThread(self.environment, self.global_network, flags.local_t_max, visualise)
         logger.debug("done setting up RunnerTread")
+        
+        # Setup experience
+        self.experience = Experience(flags.experience_history_size)
         
         #@TODO check device usage: should we build a cluster?
         # Setup Base Network
@@ -121,11 +148,33 @@ class Application(object):
                                         flags.env_type,
                                         flags.env_name,
                                         flags.entropy_beta,
-                                        flags.local_t_max,
                                         flags.gamma,
-                                        flags.experience_history_size,
+                                        self.experience,
                                         flags.max_time_step,
                                         device)
+        
+        # Setup Aux Networks
+        self.aux_trainers = []
+        for k in range(NUM_AUX_WORKERS):
+            self.aux_trainers.append(AuxTrainer(self.global_network,
+                                                k+1, #-1 is global, 0 is base
+                                                flags.use_pixel_change, 
+                                                flags.use_value_replay,
+                                                flags.use_reward_prediction,
+                                                flags.use_temporal_coherence,
+                                                flags.pixel_change_lambda,
+                                                flags.temporal_coherence_lambda,
+                                                initial_learning_rate,
+                                                learning_rate_input,
+                                                grad_applier,
+                                                flags.env_type,
+                                                flags.env_name,
+                                                flags.local_t_max,
+                                                flags.gamma,
+                                                flags.gamma_pc,
+                                                self.experience,
+                                                flags.max_time_step,
+                                                device))
         
         # Start tensorflow session
         config = tf.ConfigProto(log_device_placement=False,
@@ -140,8 +189,8 @@ class Application(object):
         tf.summary.scalar("score", self.score_input)
 
         self.summary_op = tf.summary.merge_all()
-        self.summary_writer = tf.summary.FileWriter(flags.log_file,
-                                                    self.sess.graph)
+        self.summary_writer = tf.summary.FileWriter(flags.log_file)
+        self.summary_writer.add_graph(self.sess.graph)
 
         # init or load checkpoint with saver
         self.saver = tf.train.Saver(self.global_network.get_vars())
@@ -149,17 +198,18 @@ class Application(object):
         checkpoint = tf.train.get_checkpoint_state(flags.checkpoint_dir)
         if checkpoint and checkpoint.model_checkpoint_path:
             self.saver.restore(self.sess, checkpoint.model_checkpoint_path)
-            logger.info("checkpoint loaded:", checkpoint.model_checkpoint_path)
+            checkpointpath = checkpoint.model_checkpoint_path.replace("/", "\\")
+            logger.info("checkpoint loaded: {}".format(checkpointpath))
             tokens = checkpoint.model_checkpoint_path.split("-")
             # set global step
             self.global_t = int(tokens[1])
-            logger.info(">>> global step set: ", self.global_t)
+            logger.info(">>> global step set: {}".format(self.global_t))
             # set wall time
             wall_t_fname = flags.checkpoint_dir + '/' + 'wall_t.' + str(self.global_t)
             with open(wall_t_fname, 'r') as f:
                 self.wall_t = float(f.read())
                 self.next_save_steps = (self.global_t + flags.save_interval_step) // flags.save_interval_step * flags.save_interval_step
-        
+                logger.debug("next save steps:{}".format(self.next_save_steps))
         else:
             logger.info("Could not find old checkpoint")
             # set wall time
@@ -174,9 +224,16 @@ class Application(object):
         self.start_time = time.time() - self.wall_t
         # Start runner
         self.runner.start_runner(self.sess, self.summary_writer)
-        # Start base_network
+        # Start base_network thread
         self.base_train_thread = threading.Thread(target=self.base_train_function, args=())
         self.base_train_thread.start()
+        
+        # Start aux_network threads
+        self.aux_train_threads = []
+        for k in range(NUM_AUX_WORKERS):
+            self.aux_train_threads.append(threading.Thread(target=self.aux_train_function, args=(k,)))
+            self.aux_train_threads[k].start()
+            
         logger.debug(threading.enumerate())
 
         logger.info('Press Ctrl+C to stop')
@@ -185,14 +242,10 @@ class Application(object):
 
     def save(self):
         """ Save checkpoint. 
-        Called from therad-0.
+        Called from base_trainer.
         """
         self.stop_requested = True
-      
-        # Wait for all other threads to stop
-        for (i, t) in enumerate(self.train_threads):
-            if i != 0:
-                t.join()
+        
       
         # Save
         if not os.path.exists(flags.checkpoint_dir):
@@ -223,6 +276,6 @@ def main(argv):
 
 if __name__ == '__main__':
     run_id = generate_id()
-    logger = logger_init(LOG_DIR, run_id, loglevel=LOG_LEVEL)
+    logger = logger_init(LOG_DIR+run_id+'/', run_id, loglevel=LOG_LEVEL)
     tf.app.run()
     
