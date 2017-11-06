@@ -19,6 +19,7 @@ from train.experience import Experience, ExperienceFrame
 
 logger = logging.getLogger("StRADRL.base_trainer")
 
+SYNC_INTERVAL = 1000
 LOG_INTERVAL = 1000
 PERFORMANCE_LOG_INTERVAL = 1000
 
@@ -70,7 +71,7 @@ class BaseTrainer(object):
         self.max_global_time_step = max_global_time_step
         self.action_size = Environment.get_action_size(env_type, env_name)
         self.local_network = UnrealModel(self.action_size,
-                                         0,
+                                         1,
                                          entropy_beta,
                                          device)
         self.local_network.prepare_loss()
@@ -161,8 +162,12 @@ class BaseTrainer(object):
             
     
     def process(self, sess, global_t, summary_writer, summary_op, score_input):
+        cur_learning_rate = self._anneal_learning_rate(global_t)
         # Copy weights from shared to local
-        sess.run( self.sync )
+        if self.local_t % SYNC_INTERVAL == 0:
+            logger.debug("Syncing to global net -- current learning rate:{}".format(cur_learning_rate))
+            logger.debug("local_t:{} - global_t:{}".format(self.local_t,global_t))
+            sess.run( self.sync )
         # get batch from process_rollout
         rollout = self.pull_batch_from_queue()
         batch = process_rollout(rollout, gamma=0.99, lambda_=1.0)
@@ -171,7 +176,7 @@ class BaseTrainer(object):
             logger.info("localtime={}".format(self.local_t))
             logger.info("action={}".format(batch.a[-1,:]))
             logger.info(" V={}".format(batch.r[-1]))
-        cur_learning_rate = self._anneal_learning_rate(global_t)
+        
         if self.local_t % PERFORMANCE_LOG_INTERVAL == 0:
             self._print_log(global_t)
 

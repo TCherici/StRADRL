@@ -27,9 +27,9 @@ from options import get_options
 logger = logging.getLogger('StRADRL.newmain')
 LOG_DIR = u'/home/tcherici/Documents/lab/StRADRL/temp/'
 LOG_LEVEL = 'debug'
-NUM_AUX_WORKERS = 1
+NUM_AUX_WORKERS = 3
 
-USE_GPU = False
+USE_GPU = True
 visualise = False
 
 # get command line args
@@ -132,7 +132,13 @@ class Application(object):
         logger.debug("done loading environment")
         
         # Setup runner
-        self.runner = RunnerThread(self.environment, self.global_network, flags.local_t_max, visualise)
+        self.runner = RunnerThread(self.environment,
+                                   self.global_network,
+                                   action_size,
+                                   flags.entropy_beta,
+                                   device,
+                                   flags.local_t_max, 
+                                   visualise)
         logger.debug("done setting up RunnerTread")
         
         # Setup experience
@@ -157,7 +163,7 @@ class Application(object):
         self.aux_trainers = []
         for k in range(NUM_AUX_WORKERS):
             self.aux_trainers.append(AuxTrainer(self.global_network,
-                                                k+1, #-1 is global, 0 is base
+                                                k+2, #-1 is global, 0 is runnerthread, 1 is base
                                                 flags.use_pixel_change, 
                                                 flags.use_value_replay,
                                                 flags.use_reward_prediction,

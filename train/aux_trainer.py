@@ -19,6 +19,7 @@ from train.experience import Experience, ExperienceFrame
 
 logger = logging.getLogger("StRADRL.aux_trainer")
 
+SYNC_INTERVAL = 1000
 
 Batch = namedtuple("Batch", ["si", "a", "a_r", "adv", "r", "terminal", "features"])#, "pc"])
 
@@ -245,8 +246,7 @@ class AuxTrainer(object):
     def process(self, sess, global_t):
 
         cur_learning_rate = self._anneal_learning_rate(global_t)
-        if global_t % 10000 == 0:
-            logger.debug("Syncing to global net -- current learning rate:{}".format(cur_learning_rate))
+        if global_t % SYNC_INTERVAL == 0:
             # Copy weights from shared to local
             sess.run( self.sync )
             

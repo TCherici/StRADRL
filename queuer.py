@@ -8,6 +8,7 @@ import six.moves.queue as queue
 import logging
 
 from environment.environment import Environment
+from model.model import UnrealModel
 
 logger = logging.getLogger('StRADRL.queuer')
 
@@ -50,17 +51,21 @@ class PartialRollout(object):
         self.pixel_changes.extend(other.pixel_changes)
 
 class RunnerThread(threading.Thread):
-    def __init__(self, env, policy, num_local_steps, visualise):
+    def __init__(self, env, global_net, action_size, entropy_beta, device, num_local_steps, visualise):
         threading.Thread.__init__(self)
         self.queue = queue.Queue(QUEUE_LENGTH)        
         self.num_local_steps = num_local_steps
         self.env = env
         self.last_features = None
-        self.policy = policy
+        self.policy = UnrealModel(action_size,
+                                         0,
+                                         entropy_beta,
+                                         device)
         self.daemon = True
         self.sess = None
         self.summary_writer = None
         self.visualise = visualise
+        self.sync = self.policy.sync_from(global_net)
     
     def start_runner(self, sess, summary_writer):
         logger.debug("starting runner")
@@ -74,7 +79,7 @@ class RunnerThread(threading.Thread):
     
     def _run(self):
         rollout_provider = env_runner(self.env, self.sess, self.policy, self.num_local_steps, \
-            self.summary_writer, self.visualise)
+            self.sync, self.summary_writer, self.visualise)
         while True:
             self.queue.put(next(rollout_provider), timeout=600.0)
             #logger.debug("added rollout. Approx queue length:{}".format(self.queue.qsize()))
@@ -88,18 +93,18 @@ def boltzmann(pi_values):
 def eps_greedy(pi_values, epsilon):
     return None
         
-def env_runner(env, sess, policy, num_local_steps, summary_writer, render):
+def env_runner(env, sess, policy, num_local_steps, syncfunc, summary_writer, render):
     """
     The logic of the thread runner.  In brief, it constantly keeps on running
     the policy, and as long as the rollout exceeds a certain length, the thread
     runner appends the policy to the queue.
     """
-    logger.debug("resetting env in session {}".format(sess))
+    logger.debug("resetting env in session {} and syncing to global".format(sess))
     last_state, last_action_reward = env.reset()
     #logger.debug(last_action_reward.shape)
     length = 0
     rewards = 0
-
+    
     while True:
         terminal_end = False
         rollout = PartialRollout()
@@ -142,6 +147,7 @@ def env_runner(env, sess, policy, num_local_steps, summary_writer, render):
                 policy.reset_state()
                 last_features = policy.base_lstm_state_out
                 logger.info("Episode finished (terminal:%s). Sum of rewards: %d. Length: %d" % (terminal,rewards, length))
+                sess.run(syncfunc)
                 length = 0
                 rewards = 0
                 break
