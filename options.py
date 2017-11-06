@@ -17,7 +17,7 @@ def get_options(option_type):
   tf.app.flags.DEFINE_boolean("use_pixel_change", True, "whether to use pixel change")
   tf.app.flags.DEFINE_boolean("use_value_replay", True, "whether to use value function replay")
   tf.app.flags.DEFINE_boolean("use_reward_prediction", True, "whether to use reward prediction")
-  tf.app.flags.DEFINE_boolean("use_temporal_coherence", False, "wheter to use temporal coherence")
+  tf.app.flags.DEFINE_boolean("use_temporal_coherence", True, "wheter to use temporal coherence")
 
   tf.app.flags.DEFINE_string("checkpoint_dir", "/tmp/StRADRL/checkpoints", "checkpoint directory")
 

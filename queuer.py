@@ -79,9 +79,14 @@ class RunnerThread(threading.Thread):
             self.queue.put(next(rollout_provider), timeout=600.0)
             #logger.debug("added rollout. Approx queue length:{}".format(self.queue.qsize()))
             
-def choose_action(pi_values):
+def boltzmann(pi_values):
     # take action with chance equal to distribution
     return np.random.choice(range(len(pi_values)), p=pi_values)
+    
+    
+#@TODO implement
+def eps_greedy(pi_values, epsilon):
+    return None
         
 def env_runner(env, sess, policy, num_local_steps, summary_writer, render):
     """
@@ -103,8 +108,8 @@ def env_runner(env, sess, policy, num_local_steps, summary_writer, render):
             action, value_, last_features = fetched[0], fetched[1], fetched[2:]
             
             #@TODO decide if argmax or probability, if latter fix experience replay selection
-            #chosenaction = choose_action(action)
-            chosenaction = np.argmax(action)
+            chosenaction = boltzmann(action)
+            #chosenaction = np.argmax(action)
             
             state, reward, terminal, pixel_change = env.process(chosenaction)
             if render:
@@ -127,7 +132,6 @@ def env_runner(env, sess, policy, num_local_steps, summary_writer, render):
                 summary_writer.add_summary(summary, policy.global_step.eval())
                 summary_writer.flush()
             
-            #@TODO investigate timestep_limit
             #timestep_limit = env.spec.tags.get('wrapper_config.TimeLimit.max_episode_steps')
             timestep_limit = 100000
             if terminal or length >= timestep_limit:
