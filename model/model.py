@@ -101,7 +101,7 @@ class UnrealModel(object):
 
     def _create_base_network(self):
         # State (Base image input)
-        self.base_input = tf.placeholder("float", [None, 84, 84, 3])
+        self.base_input = tf.placeholder("float", [None, 84, 84, 3], name="base_input")
 
         # Last action and reward
         self.base_last_action_reward_input = tf.placeholder("float", [None, self._action_size+1])
@@ -315,8 +315,8 @@ class UnrealModel(object):
     # temporal coherence
     def _create_tc_network(self):
         # State (Image input)
-        self.tc_input1 = tf.placeholder("float", [None, 84, 84, 3])
-        self.tc_input2 = tf.placeholder("float", [None, 84, 84, 3])
+        self.tc_input1 = tf.placeholder("float", [None, 84, 84, 3], name="tc_input1")
+        self.tc_input2 = tf.placeholder("float", [None, 84, 84, 3], name="tc_input2")
         
         # tc conv layers
         tc_output1 = self._base_conv_layers(self.tc_input1, reuse=self.reuse_conv)

@@ -27,7 +27,7 @@ from options import get_options
 logger = logging.getLogger('StRADRL.newmain')
 LOG_DIR = u'/home/tcherici/Documents/lab/StRADRL/temp/'
 LOG_LEVEL = 'debug'
-NUM_AUX_WORKERS = 3
+NUM_AUX_WORKERS = 1
 
 USE_GPU = False
 visualise = False

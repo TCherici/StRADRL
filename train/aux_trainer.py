@@ -20,8 +20,7 @@ from train.experience import Experience, ExperienceFrame
 logger = logging.getLogger("StRADRL.aux_trainer")
 
 
-
-Batch = namedtuple("Batch", ["si", "a", "a_r", "adv", "r", "terminal", "features", "pc"])
+Batch = namedtuple("Batch", ["si", "a", "a_r", "adv", "r", "terminal", "features"])#, "pc"])
 
 class AuxTrainer(object):
     def __init__(self,
@@ -91,10 +90,10 @@ class AuxTrainer(object):
             learning_rate = 0.0
         return learning_rate
         
-    def discount(x, gamma):
+    def discount(self, x, gamma):
         return scipy.signal.lfilter([1], [1, -gamma], x[::-1], axis=0)[::-1]
         
-    def _process_base(self, sess, policy, gamma):
+    def _process_base(self, sess, policy, gamma, lambda_=1.0):
         # base A3C from experience replay
         experience_frames = self.experience.sample_sequence(self.local_t_max+1)
         batch_si = []
@@ -104,15 +103,19 @@ class AuxTrainer(object):
         batch_features = []
         values = []
         last_state = experience_frames[0].state
-        last_action_reward = experience_frames[0].action + [experience_frames[0].reward]
-        for frame in range(1,self.local_t_max+1):
+        last_action_reward = experience_frames[0].concat_action_and_reward(experience_frames[0].action,
+                                                                        self.action_size,
+                                                                        experience_frames[0].reward)
+        for frame in range(1,len(experience_frames)):
             state = experience_frames[frame].state
             batch_si.append(state)
             action = experience_frames[frame].action
-            batch_a.append(action)
             reward = experience_frames[frame].reward
-            action_reward.append(action+[reward])
+            a_r = experience_frames[frame].concat_action_and_reward(action, self.action_size, reward)
+            action_reward.append(a_r)
+            batch_a.append(a_r[:-1])
             rewards.append(reward)
+            #logger.debug("last_action_reward:{}".format(last_action_reward))
             _, value, features = policy.run_base_policy_and_value(sess, last_state, last_action_reward)
             batch_features.append(features)
             values.append(value)
@@ -125,14 +128,12 @@ class AuxTrainer(object):
            r = 0.
                 
         vpred_t = np.asarray(values + [r])
-            
-        rewards_plus_v = np.asarray(rewards + [values])
-        logging.debug(rewards_plus_v.shape)
-        batch_r = discount(rewards_plus_v, gamma)[:-1]
+        rewards_plus_v = np.asarray(rewards + [r])
+        batch_r = self.discount(rewards_plus_v, gamma)[:-1]
         delta_t = rewards + gamma * vpred_t[1:] - vpred_t[:-1]
         # this formula for the advantage comes "Generalized Advantage Estimation":
         # https://arxiv.org/abs/1506.02438
-        batch_adv = discount(delta_t, gamma * lambda_)
+        batch_adv = self.discount(delta_t, gamma * lambda_)
 
         
         start_features = batch_features[0]
@@ -236,8 +237,8 @@ class AuxTrainer(object):
         # Revese sequence to calculate from the last
         batch_tc_input1 = []
         batch_tc_input2 = []
-        for frame in range(len(tc_experience_frames)):
-            batch_tc_input1.append(tc_experience_frames[frame].state)
+        for frame in range(len(tc_experience_frames)-1):
+            batch_tc_input1.append(tc_experience_frames[frame+1].state)
             batch_tc_input2.append(tc_experience_frames[frame].state)
         return batch_tc_input1, batch_tc_input2
 
@@ -304,9 +305,11 @@ class AuxTrainer(object):
         if self.use_temporal_coherence:
             batch_tc_input1, batch_tc_input2 = self._process_tc()
             tc_feed_dict = {
-                self.local_network.tc_input1: batch_tc_input1,
-                self.local_network.tc_input2: batch_tc_input2
+                self.local_network.tc_input1: np.asarray(batch_tc_input1),
+                self.local_network.tc_input2: np.asarray(batch_tc_input2)
             }
+            
+            feed_dict.update(tc_feed_dict)
 
         # Calculate gradients and copy them to global netowrk.
         sess.run( self.apply_gradients, feed_dict=feed_dict )
