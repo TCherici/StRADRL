@@ -19,7 +19,7 @@ from train.experience import Experience, ExperienceFrame
 
 logger = logging.getLogger("StRADRL.aux_trainer")
 
-SYNC_INTERVAL = 1000
+SYNC_INTERVAL = 10000
 
 Batch = namedtuple("Batch", ["si", "a", "a_r", "adv", "r", "terminal", "features"])#, "pc"])
 
@@ -36,6 +36,7 @@ class AuxTrainer(object):
                 initial_learning_rate,
                 learning_rate_input,
                 grad_applier,
+                aux_t,
                 env_type,
                 env_name,
                 local_t_max,
@@ -53,6 +54,8 @@ class AuxTrainer(object):
         self.learning_rate_input = learning_rate_input
         self.env_type = env_type
         self.env_name = env_name
+        self.local_t = 0
+        self.next_sync_t = 0
         self.local_t_max = local_t_max
         self.gamma = gamma
         self.gamma_pc = gamma_pc
@@ -78,7 +81,6 @@ class AuxTrainer(object):
                                                            global_network.get_vars(),
                                                            self.local_network.get_vars())
         self.sync = self.local_network.sync_from(global_network)
-        self.local_t = 0
         self.initial_learning_rate = initial_learning_rate
         self.episode_reward = 0
         # trackers for the experience replay creation
@@ -243,12 +245,15 @@ class AuxTrainer(object):
             batch_tc_input2.append(tc_experience_frames[frame].state)
         return batch_tc_input1, batch_tc_input2
 
-    def process(self, sess, global_t):
+    def process(self, sess, global_t, aux_t):
 
         cur_learning_rate = self._anneal_learning_rate(global_t)
-        if global_t % SYNC_INTERVAL == 0:
+        if self.local_t >= self.next_sync_t:
             # Copy weights from shared to local
+            logger.debug("aux_t:{} -- local_t:{} -- syncing...".format(aux_t, self.local_t))
             sess.run( self.sync )
+            self.next_sync_t += SYNC_INTERVAL
+            logger.debug("next_sync:{}".format(self.next_sync_t))
             
         batch = self._process_base(sess, self.local_network, self.gamma)
         
@@ -313,5 +318,7 @@ class AuxTrainer(object):
 
         # Calculate gradients and copy them to global netowrk.
         sess.run( self.apply_gradients, feed_dict=feed_dict )
-
+        
+        self.local_t += len(batch.r)
+        return len(batch.r)
 

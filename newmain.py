@@ -86,8 +86,11 @@ class Application(object):
                 trainer.stop()
                 break
             
-            trainer.process(self.sess,
-                            self.global_t)
+            diff_aux_t = trainer.process(self.sess,
+                                        self.global_t,
+                                        self.aux_t)
+            self.aux_t += diff_aux_t
+            #logger.debug("aux_t:{}".format(self.aux_t))
             
             
     def run(self):
@@ -98,6 +101,7 @@ class Application(object):
         initial_learning_rate = 0.001 #@TODO implement unreal method?
         
         self.global_t = 0
+        self.aux_t = 0
         self.stop_requested = False
         self.terminate_requested = False
         logger.debug("getting action size...") 
@@ -173,6 +177,7 @@ class Application(object):
                                                 initial_learning_rate,
                                                 learning_rate_input,
                                                 grad_applier,
+                                                self.aux_t,
                                                 flags.env_type,
                                                 flags.env_name,
                                                 flags.local_t_max,
@@ -209,7 +214,9 @@ class Application(object):
             tokens = checkpoint.model_checkpoint_path.split("-")
             # set global step
             self.global_t = int(tokens[1])
+            self.aux_t = int(tokens[2])
             logger.info(">>> global step set: {}".format(self.global_t))
+            logger.info(">>> aux step set: {}".format(self.aux_t))
             # set wall time
             wall_t_fname = flags.checkpoint_dir + '/' + 'wall_t.' + str(self.global_t)
             with open(wall_t_fname, 'r') as f:
@@ -265,7 +272,8 @@ class Application(object):
         logger.info('Start saving.')
         self.saver.save(self.sess,
                     flags.checkpoint_dir + '/' + 'checkpoint',
-                    global_step = self.global_t)
+                    global_step = self.global_t,
+                    aux_step = self.aux_t)
         logger.info('End saving.')  
     
         self.stop_requested = False

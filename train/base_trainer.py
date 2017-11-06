@@ -82,6 +82,7 @@ class BaseTrainer(object):
         self.sync = self.local_network.sync_from(global_network)
         self.experience = experience
         self.local_t = 0
+        self.next_sync_t = 0
         self.initial_learning_rate = initial_learning_rate
         self.episode_reward = 0
         # trackers for the experience replay creation
@@ -164,10 +165,11 @@ class BaseTrainer(object):
     def process(self, sess, global_t, summary_writer, summary_op, score_input):
         cur_learning_rate = self._anneal_learning_rate(global_t)
         # Copy weights from shared to local
-        if self.local_t % SYNC_INTERVAL == 0:
+        if self.local_t >= self.next_sync_t:
             logger.debug("Syncing to global net -- current learning rate:{}".format(cur_learning_rate))
             logger.debug("local_t:{} - global_t:{}".format(self.local_t,global_t))
             sess.run( self.sync )
+            self.next_sync_t += SYNC_INTERVAL
         # get batch from process_rollout
         rollout = self.pull_batch_from_queue()
         batch = process_rollout(rollout, gamma=0.99, lambda_=1.0)
@@ -203,7 +205,7 @@ class BaseTrainer(object):
         
         # Return advanced local step size
         #@TODO check what we are doing with the timekeeping
-        diff_local_t = self.local_t - global_t
-        return diff_local_t
+        diff_global_t = self.local_t - global_t
+        return diff_global_t
         
 
