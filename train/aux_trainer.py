@@ -20,6 +20,7 @@ from train.experience import Experience, ExperienceFrame
 logger = logging.getLogger("StRADRL.aux_trainer")
 
 SYNC_INTERVAL = 10000
+LOG_INTERVAL = 1000
 
 Batch = namedtuple("Batch", ["si", "a", "a_r", "adv", "r", "terminal", "features"])#, "pc"])
 
@@ -56,14 +57,16 @@ class AuxTrainer(object):
         self.env_name = env_name
         self.local_t = 0
         self.next_sync_t = 0
+        self.next_log_t = 0
         self.local_t_max = local_t_max
         self.gamma = gamma
         self.gamma_pc = gamma_pc
         self.experience = experience
         self.max_global_time_step = max_global_time_step
         self.action_size = Environment.get_action_size(env_type, env_name)
+        self.thread_index = thread_index
         self.local_network = UnrealModel(self.action_size,
-                                         thread_index,
+                                         self.thread_index,
                                          0.,
                                          device,
                                          use_pixel_change,
@@ -245,7 +248,7 @@ class AuxTrainer(object):
             batch_tc_input2.append(tc_experience_frames[frame].state)
         return batch_tc_input1, batch_tc_input2
 
-    def process(self, sess, global_t, aux_t):
+    def process(self, sess, global_t, aux_t, summary_writer, summary_op_aux, summary_aux):
 
         cur_learning_rate = self._anneal_learning_rate(global_t)
         if self.local_t >= self.next_sync_t:
@@ -254,7 +257,9 @@ class AuxTrainer(object):
             sess.run( self.sync )
             self.next_sync_t += SYNC_INTERVAL
             logger.debug("next_sync:{}".format(self.next_sync_t))
-            
+        
+        aux_losses = []
+        aux_losses.append(self.local_network.base_loss)
         batch = self._process_base(sess, self.local_network, self.gamma)
         
         feed_dict = {
@@ -271,7 +276,8 @@ class AuxTrainer(object):
         # [Pixel change]
         if self.use_pixel_change:
             batch_pc_si, batch_pc_last_action_reward, batch_pc_a, batch_pc_R = self._process_pc(sess)
-
+            aux_losses.append(self.local_network.pc_loss)
+            
             pc_feed_dict = {
                 self.local_network.pc_input: batch_pc_si,
                 self.local_network.pc_last_action_reward_input: batch_pc_last_action_reward,
@@ -285,7 +291,8 @@ class AuxTrainer(object):
         # [Value replay]
         if self.use_value_replay:
             batch_vr_si, batch_vr_last_action_reward, batch_vr_R = self._process_vr(sess)
-          
+            aux_losses.append(self.local_network.vr_loss)
+            
             vr_feed_dict = {
                 self.local_network.vr_input: batch_vr_si,
                 self.local_network.vr_last_action_reward_input : batch_vr_last_action_reward,
@@ -298,6 +305,7 @@ class AuxTrainer(object):
         # [Reward prediction]
         if self.use_reward_prediction:
             batch_rp_si, batch_rp_c = self._process_rp()
+            aux_losses.append(self.local_network.rp_loss)
             rp_feed_dict = {
                 self.local_network.rp_input: batch_rp_si,
                 self.local_network.rp_c_target: batch_rp_c,
@@ -309,15 +317,27 @@ class AuxTrainer(object):
         # [Temporal coherence]
         if self.use_temporal_coherence:
             batch_tc_input1, batch_tc_input2 = self._process_tc()
+            aux_losses.append(self.local_network.tc_loss)
             tc_feed_dict = {
                 self.local_network.tc_input1: np.asarray(batch_tc_input1),
                 self.local_network.tc_input2: np.asarray(batch_tc_input2)
             }
             
             feed_dict.update(tc_feed_dict)
-
+        
+        
         # Calculate gradients and copy them to global netowrk.
-        sess.run( self.apply_gradients, feed_dict=feed_dict )
+        _, losses = sess.run([self.apply_gradients, aux_losses], feed_dict=feed_dict )
+        
+        if self.thread_index==2 and aux_t >= self.next_log_t:
+            logger.debug("losses:{}".format(losses))
+            self.next_log_t += LOG_INTERVAL
+            feed_dict_aux = {}
+            for k in range(len(losses)):
+                feed_dict_aux.update({summary_aux[k]:losses[k]})
+            summary_str = sess.run(summary_op_aux, feed_dict=feed_dict_aux)
+            summary_writer.add_summary(summary_str, global_t)
+            summary_writer.flush()
         
         self.local_t += len(batch.r)
         return len(batch.r)

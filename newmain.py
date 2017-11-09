@@ -27,7 +27,7 @@ from options import get_options
 logger = logging.getLogger('StRADRL.newmain')
 LOG_DIR = u'/home/tcherici/Documents/lab/StRADRL/temp/'
 LOG_LEVEL = 'debug'
-NUM_AUX_WORKERS = 3
+NUM_AUX_WORKERS = 1
 
 USE_GPU = True
 visualise = False
@@ -66,7 +66,7 @@ class Application(object):
                                           self.global_t,
                                           self.summary_writer,
                                           self.summary_op,
-                                          self.score_input)
+                                          self.summary_values)
             self.global_t += diff_global_t
             
     def aux_train_function(self, aux_index):
@@ -88,7 +88,10 @@ class Application(object):
             
             diff_aux_t = trainer.process(self.sess,
                                         self.global_t,
-                                        self.aux_t)
+                                        self.aux_t,
+                                        self.summary_writer,
+                                        self.summary_op_aux,
+                                        self.summary_aux)
             self.aux_t += diff_aux_t
             #logger.debug("aux_t:{}".format(self.aux_t))
             
@@ -195,11 +198,44 @@ class Application(object):
         
         self.sess.run(tf.global_variables_initializer())
         
-        # summary for tensorboard
+        # tensorboard summary for base 
         self.score_input = tf.placeholder(tf.int32)
-        tf.summary.scalar("score", self.score_input)
+        self.base_loss = tf.placeholder(tf.float32)
+        self.base_entropy = tf.placeholder(tf.float32)
+        score = tf.summary.scalar("base/score", self.score_input)
+        loss = tf.summary.scalar("base/loss", self.base_loss)
+        entropy = tf.summary.scalar("base/entropy", self.base_entropy)
 
-        self.summary_op = tf.summary.merge_all()
+        self.summary_values = [self.score_input, self.base_loss, self.base_entropy]
+        self.summary_op = tf.summary.merge([score,loss,entropy])
+        
+        # tensorboard summary for aux
+        self.summary_aux = []
+        aux_losses = []
+        self.aux_base_loss = tf.placeholder(tf.float32)
+        self.summary_aux.append(self.aux_base_loss)
+        aux_losses.append(tf.summary.scalar("aux/base_loss", self.aux_base_loss))
+        
+        if flags.use_pixel_change:
+            self.pc_loss = tf.placeholder(tf.float32)
+            self.summary_aux.append(self.pc_loss)
+            aux_losses.append(tf.summary.scalar("aux/pc_loss", self.pc_loss))
+        if flags.use_value_replay:
+            self.vr_loss = tf.placeholder(tf.float32)
+            self.summary_aux.append(self.vr_loss)
+            aux_losses.append(tf.summary.scalar("aux/vr_loss", self.vr_loss))
+        if flags.use_reward_prediction:
+            self.rp_loss = tf.placeholder(tf.float32)
+            self.summary_aux.append(self.rp_loss)
+            aux_losses.append(tf.summary.scalar("aux/rp_loss", self.rp_loss))
+        if flags.use_temporal_coherence:
+            self.tc_loss = tf.placeholder(tf.float32)
+            self.summary_aux.append(self.tc_loss)
+            aux_losses.append(tf.summary.scalar("aux/tc_loss", self.tc_loss))
+        
+        self.summary_op_aux = tf.summary.merge(aux_losses)
+        
+        #self.summary_op = tf.summary.merge_all()
         self.summary_writer = tf.summary.FileWriter(flags.log_file)
         self.summary_writer.add_graph(self.sess.graph)
 
@@ -214,9 +250,8 @@ class Application(object):
             tokens = checkpoint.model_checkpoint_path.split("-")
             # set global step
             self.global_t = int(tokens[1])
-            self.aux_t = int(tokens[2])
             logger.info(">>> global step set: {}".format(self.global_t))
-            logger.info(">>> aux step set: {}".format(self.aux_t))
+            logger.info(">>> aux step: {}".format(self.aux_t))
             # set wall time
             wall_t_fname = flags.checkpoint_dir + '/' + 'wall_t.' + str(self.global_t)
             with open(wall_t_fname, 'r') as f:
@@ -272,9 +307,8 @@ class Application(object):
         logger.info('Start saving.')
         self.saver.save(self.sess,
                     flags.checkpoint_dir + '/' + 'checkpoint',
-                    global_step = self.global_t,
-                    aux_step = self.aux_t)
-        logger.info('End saving.')  
+                    global_step = self.global_t)
+        logger.info('End saving.')
     
         self.stop_requested = False
         self.next_save_steps += flags.save_interval_step

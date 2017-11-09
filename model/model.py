@@ -338,12 +338,15 @@ class UnrealModel(object):
         log_pi = tf.log(tf.clip_by_value(self.base_pi, 1e-20, 1.0))
         
         # Policy entropy
-        entropy = -tf.reduce_sum(self.base_pi * log_pi, reduction_indices=1)
+        self.entropy = -tf.reduce_sum(self.base_pi * log_pi, reduction_indices=1)
+        
+        
+        
         
         # Policy loss (output)
         policy_loss = -tf.reduce_sum( tf.reduce_sum( tf.multiply( log_pi, self.base_a ),
                                                      reduction_indices=1 ) *
-                                      self.base_adv + entropy * self._entropy_beta)
+                                      self.base_adv + self.entropy * self._entropy_beta)
         
         # R (input for value target)
         self.base_r = tf.placeholder("float", [None])
@@ -397,26 +400,26 @@ class UnrealModel(object):
     
     def prepare_loss(self):
         with tf.device(self._device):
-            loss = tf.zeros([1])
+            loss = tf.Variable(tf.zeros([], dtype=np.float32), name="loss")
             if self._use_base:
-                base_loss = self._base_loss()
-                loss = loss + base_loss
+                self.base_loss = self._base_loss()
+                loss = loss + self.base_loss
       
             if self._use_pixel_change:
-                pc_loss = self._pc_loss()
-                loss = loss + pc_loss
+                self.pc_loss = self._pc_loss()
+                loss = loss + self.pc_loss
 
             if self._use_value_replay:
-                vr_loss = self._vr_loss()
-                loss = loss + vr_loss
+                self.vr_loss = self._vr_loss()
+                loss = loss + self.vr_loss
 
             if self._use_reward_prediction:
-                rp_loss = self._rp_loss()
-                loss = loss + rp_loss
+                self.rp_loss = self._rp_loss()
+                loss = loss + self.rp_loss
                 
             if self._use_temporal_coherence:
-                tc_loss = self._tc_loss()
-                loss = loss + tc_loss
+                self.tc_loss = self._tc_loss()
+                loss = loss + self.tc_loss
             
             self.total_loss = loss
 
