@@ -28,7 +28,7 @@ def get_options(option_type):
     tf.app.flags.DEFINE_float("rmsp_alpha", 0.99, "decay parameter for rmsprop")
     tf.app.flags.DEFINE_float("rmsp_epsilon", 0.1, "epsilon parameter for rmsprop")
 
-    tf.app.flags.DEFINE_string("log_file", "/tmp/StRADRL/StRADRL_log", "log file directory")
+    tf.app.flags.DEFINE_string("temp_dir", "/tmp/StRADRL/tensorboard/", "base directory for tensorboard")
     tf.app.flags.DEFINE_float("initial_alpha_low", 1e-4, "log_uniform low limit for learning rate")
     tf.app.flags.DEFINE_float("initial_alpha_high", 5e-3, "log_uniform high limit for learning rate")
     tf.app.flags.DEFINE_float("initial_alpha_log_rate", 0.5, "log_uniform interpolate rate for learning rate")

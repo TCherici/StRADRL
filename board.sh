@@ -1,4 +1,4 @@
 #!/bin/sh
 
-tensorboard --logdir /tmp/StRADRL
+tensorboard --logdir /tmp/StRADRL/tensorboard/
 

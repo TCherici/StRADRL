@@ -1,7 +1,7 @@
 package(default_visibility = ["//visibility:public"])
 
 env_args = [
-  "--env_type lab",
+  "--env_type maze",
   "--env_name nav_maze_static_01",
 ]
 

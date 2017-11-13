@@ -19,7 +19,7 @@ from train.experience import Experience, ExperienceFrame
 
 logger = logging.getLogger("StRADRL.base_trainer")
 
-SYNC_INTERVAL = 1000
+SYNC_INTERVAL = 10000
 LOG_INTERVAL = 1000
 PERFORMANCE_LOG_INTERVAL = 1000
 

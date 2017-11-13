@@ -25,15 +25,20 @@ from queuer import RunnerThread
 from options import get_options
 
 logger = logging.getLogger('StRADRL.newmain')
-LOG_DIR = u'/home/tcherici/Documents/lab/StRADRL/temp/'
+
+# get command line args
+flags = get_options("training")
+
+RUN_ID = generate_id()
+TENSORBOARD_NAME = RUN_ID
+LOG_DIR = u'/tmp/StRADRL/log/'
 LOG_LEVEL = 'debug'
-NUM_AUX_WORKERS = 1
+NUM_AUX_WORKERS = 0
+CONTINUE_TRAINING = False
 
 USE_GPU = True
 visualise = False
 
-# get command line args
-flags = get_options("training")
 
 class Application(object):
     def __init__(self):
@@ -60,6 +65,7 @@ class Application(object):
                 # Save checkpoint
                 logger.debug("Steps:{}".format(self.global_t))
                 logger.debug(self.next_save_steps)
+                
                 self.save()
             
             diff_global_t = trainer.process(self.sess,
@@ -101,7 +107,7 @@ class Application(object):
         if USE_GPU:
             device = "/gpu:0"
         logger.debug("start App")
-        initial_learning_rate = 0.001 #@TODO implement unreal method?
+        initial_learning_rate = 1e-5 #@TODO implement unreal method?
         
         self.global_t = 0
         self.aux_t = 0
@@ -207,7 +213,8 @@ class Application(object):
         entropy = tf.summary.scalar("base/entropy", self.base_entropy)
 
         self.summary_values = [self.score_input, self.base_loss, self.base_entropy]
-        self.summary_op = tf.summary.merge([score,loss,entropy])
+        #self.summary_op = tf.summary.merge([score,loss,entropy])
+        self.summary_op = tf.summary.merge_all()
         
         # tensorboard summary for aux
         self.summary_aux = []
@@ -236,14 +243,18 @@ class Application(object):
         self.summary_op_aux = tf.summary.merge(aux_losses)
         
         #self.summary_op = tf.summary.merge_all()
-        self.summary_writer = tf.summary.FileWriter(flags.log_file)
+        tensorboard_path = flags.temp_dir+TENSORBOARD_NAME+"/"
+        logger.info("tensorboard path:"+tensorboard_path)
+        if not os.path.exists(tensorboard_path):
+            os.mkdir(tensorboard_path)
+        self.summary_writer = tf.summary.FileWriter(tensorboard_path)
         self.summary_writer.add_graph(self.sess.graph)
 
         # init or load checkpoint with saver
         self.saver = tf.train.Saver(self.global_network.get_vars())
-
+        
         checkpoint = tf.train.get_checkpoint_state(flags.checkpoint_dir)
-        if checkpoint and checkpoint.model_checkpoint_path:
+        if CONTINUE_TRAINING and checkpoint and checkpoint.model_checkpoint_path:
             self.saver.restore(self.sess, checkpoint.model_checkpoint_path)
             checkpointpath = checkpoint.model_checkpoint_path.replace("/", "\\")
             logger.info("checkpoint loaded: {}".format(checkpointpath))
@@ -323,7 +334,7 @@ def main(argv):
     app.run()
 
 if __name__ == '__main__':
-    run_id = generate_id()
-    logger = logger_init(LOG_DIR+run_id+'/', run_id, loglevel=LOG_LEVEL)
+    logger = logger_init(LOG_DIR+RUN_ID+'/', RUN_ID, loglevel=LOG_LEVEL)
+    
     tf.app.run()
     
