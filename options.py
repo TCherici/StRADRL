@@ -15,9 +15,9 @@ def get_options(option_type):
   tf.app.flags.DEFINE_string("env_type", "lab", "environment type (lab or gym or maze)")
   tf.app.flags.DEFINE_string("env_name", "nav_maze_static_01",  "environment name")
   tf.app.flags.DEFINE_boolean("use_pixel_change", False, "whether to use pixel change")
-  tf.app.flags.DEFINE_boolean("use_value_replay", True, "whether to use value function replay")
-  tf.app.flags.DEFINE_boolean("use_reward_prediction", True, "whether to use reward prediction")
-  tf.app.flags.DEFINE_boolean("use_temporal_coherence", True, "wheter to use temporal coherence")
+  tf.app.flags.DEFINE_boolean("use_value_replay", False, "whether to use value function replay")
+  tf.app.flags.DEFINE_boolean("use_reward_prediction", False, "whether to use reward prediction")
+  tf.app.flags.DEFINE_boolean("use_temporal_coherence", False, "wheter to use temporal coherence")
 
   tf.app.flags.DEFINE_string("checkpoint_dir", "/tmp/StRADRL/checkpoints", "checkpoint directory")
 
@@ -25,16 +25,12 @@ def get_options(option_type):
   if option_type == 'training':
     tf.app.flags.DEFINE_integer("parallel_size", 1, "parallel thread size")
     tf.app.flags.DEFINE_integer("local_t_max", 20, "repeat step size")
-    tf.app.flags.DEFINE_float("rmsp_alpha", 0.99, "decay parameter for rmsprop")
-    tf.app.flags.DEFINE_float("rmsp_epsilon", 0.1, "epsilon parameter for rmsprop")
 
     tf.app.flags.DEFINE_string("temp_dir", "/tmp/StRADRL/tensorboard/", "base directory for tensorboard")
-    tf.app.flags.DEFINE_float("initial_alpha_low", 1e-4, "log_uniform low limit for learning rate")
-    tf.app.flags.DEFINE_float("initial_alpha_high", 5e-3, "log_uniform high limit for learning rate")
-    tf.app.flags.DEFINE_float("initial_alpha_log_rate", 0.5, "log_uniform interpolate rate for learning rate")
+    tf.app.flags.DEFINE_float("initial_learning_rate", 1e-4, "learning rate")
     tf.app.flags.DEFINE_float("gamma", 0.99, "discount factor for rewards")
     tf.app.flags.DEFINE_float("gamma_pc", 0.9, "discount factor for pixel control")
-    tf.app.flags.DEFINE_float("entropy_beta", 0.001, "entropy regurarlization constant")
+    tf.app.flags.DEFINE_float("entropy_beta", 0.01, "entropy regurarlization constant")
     tf.app.flags.DEFINE_float("pixel_change_lambda", 0.0001, "pixel change lambda") # 0.05, 0.01 ~ 0.1 for lab, 0.0001 ~ 0.01 for gym
     tf.app.flags.DEFINE_float("temporal_coherence_lambda", 10., "temporal coherence lambda") #@TODO check values
     tf.app.flags.DEFINE_integer("experience_history_size", 2000, "experience replay buffer size")

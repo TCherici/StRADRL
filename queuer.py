@@ -12,7 +12,8 @@ from model.model import UnrealModel
 
 logger = logging.getLogger('StRADRL.queuer')
 
-QUEUE_LENGTH = 30
+QUEUE_LENGTH = 5
+TIMESTEP_LIMIT = 2000
 
 
 class PartialRollout(object):
@@ -61,16 +62,13 @@ class RunnerThread(threading.Thread):
                                          0,
                                          entropy_beta,
                                          device)
-        self.daemon = True
         self.sess = None
-        self.summary_writer = None
         self.visualise = visualise
         self.sync = self.policy.sync_from(global_net)
     
-    def start_runner(self, sess, summary_writer):
+    def start_runner(self, sess):
         logger.debug("starting runner")
         self.sess = sess
-        self.summary_writer = summary_writer
         self.start()
         
     def run(self):
@@ -79,7 +77,7 @@ class RunnerThread(threading.Thread):
     
     def _run(self):
         rollout_provider = env_runner(self.env, self.sess, self.policy, self.num_local_steps, \
-            self.sync, self.summary_writer, self.visualise)
+            self.sync, self.visualise)
         while True:
             self.queue.put(next(rollout_provider), timeout=600.0)
             #logger.debug("added rollout. Approx queue length:{}".format(self.queue.qsize()))
@@ -91,9 +89,18 @@ def boltzmann(pi_values):
     
 #@TODO implement
 def eps_greedy(pi_values, epsilon):
-    return None
+    if np.random.random() < epsilon:
+        return np.random.choice(range(len(pi_values)))
+    else:
+        return np.argmax(pi_values)
         
-def env_runner(env, sess, policy, num_local_steps, syncfunc, summary_writer, render):
+def onehot(action, action_size, dtype="float32"):
+    action_oh = np.zeros([action_size], dtype=dtype)
+    action_oh[action] = 1.
+    return action_oh
+    
+        
+def env_runner(env, sess, policy, num_local_steps, syncfunc, render):
     """
     The logic of the thread runner.  In brief, it constantly keeps on running
     the policy, and as long as the rollout exceeds a certain length, the thread
@@ -102,6 +109,7 @@ def env_runner(env, sess, policy, num_local_steps, syncfunc, summary_writer, ren
     logger.debug("resetting env in session {}".format(sess))
     last_state, last_action_reward = env.reset()
     #logger.debug(last_action_reward.shape)
+    last_features = policy.get_initial_features()
     length = 0
     rewards = 0
     
@@ -110,11 +118,12 @@ def env_runner(env, sess, policy, num_local_steps, syncfunc, summary_writer, ren
         rollout = PartialRollout()
         for _ in range(num_local_steps):
             fetched = policy.run_base_policy_and_value(sess, last_state, last_action_reward)
-            action, value_, last_features = fetched[0], fetched[1], fetched[2:]
+            pi, value_, features = fetched[0], fetched[1], fetched[2:]
             
             #@TODO decide if argmax or probability, if latter fix experience replay selection
-            chosenaction = boltzmann(action)
-            #chosenaction = np.argmax(action)
+            chosenaction = boltzmann(pi)
+            #chosenaction = np.argmax(pi)
+            action = onehot(chosenaction, len(pi))
             
             state, reward, terminal, pixel_change = env.process(chosenaction)
             if render:
@@ -125,22 +134,15 @@ def env_runner(env, sess, policy, num_local_steps, syncfunc, summary_writer, ren
             length += 1
             rewards += reward
             
+            
             last_state = state
+            last_features = features
             last_action_reward = np.append(action,reward)
             
-            #@TODO fix information pipeline
-            info = False 
-            if info:
-                summary = tf.Summary()
-                for k, v in info.items():
-                    summary.value.add(tag=k, simple_value=float(v))
-                summary_writer.add_summary(summary, policy.global_step.eval())
-                summary_writer.flush()
-            
             #timestep_limit = env.spec.tags.get('wrapper_config.TimeLimit.max_episode_steps')
-            timestep_limit = 100000
-            if terminal or length >= timestep_limit:
+            if terminal or length >= TIMESTEP_LIMIT:
                 terminal_end = True
+                rollout.terminal = True
                 # the if condition below has been disabled because deepmind lab has no metadata
                 #if length >= timestep_limit or not env.metadata.get('semantics.autoreset'):
                 last_state, last_action_reward = env.reset()

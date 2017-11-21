@@ -20,8 +20,8 @@ from train.experience import Experience, ExperienceFrame
 logger = logging.getLogger("StRADRL.base_trainer")
 
 SYNC_INTERVAL = 10000
-LOG_INTERVAL = 1000
-PERFORMANCE_LOG_INTERVAL = 1000
+LOG_INTERVAL = 10000
+PERFORMANCE_LOG_INTERVAL = 10000
 
 Batch = namedtuple("Batch", ["si", "a", "a_r", "adv", "r", "terminal", "features", "pc"])
 
@@ -82,12 +82,18 @@ class BaseTrainer(object):
         self.sync = self.local_network.sync_from(global_network)
         self.experience = experience
         self.local_t = 0
-        self.next_sync_t = 0
+        self.next_log_t = 0
+        self.next_performance_t = PERFORMANCE_LOG_INTERVAL
+        self.next_sync_t = SYNC_INTERVAL
         self.initial_learning_rate = initial_learning_rate
         self.episode_reward = 0
         # trackers for the experience replay creation
-        self.last_action = 0#np.zeros(self.action_size)
+        self.last_action = 0
         self.last_reward = 0
+        self.ep_ploss = 0.
+        self.ep_vloss = 0.
+        self.ep_entr = 0.
+        self.ep_grad = 0.
         
     
     def _anneal_learning_rate(self, global_time_step):
@@ -105,9 +111,9 @@ class BaseTrainer(object):
         
     def pull_batch_from_queue(self):
         """
-        self explanatory:  take a rollout from the queue of the thread runner.
+        take a rollout from the queue of the thread runner.
         """
-        #@TODO change 100 to a possible variable
+        #@TODO change 5 to a possible variable
         rollout_full = False
         count = 0
         while not rollout_full:
@@ -174,13 +180,17 @@ class BaseTrainer(object):
         rollout = self.pull_batch_from_queue()
         batch = process_rollout(rollout, gamma=0.99, lambda_=1.0)
         self.local_t += len(batch.si)
-        if self.local_t % LOG_INTERVAL == 0:
+
+        
+        if self.local_t > self.next_performance_t:
+            self._print_log(global_t)
+            self.next_performance_t += PERFORMANCE_LOG_INTERVAL
+                
+        if self.local_t >= self.next_log_t:
             logger.info("localtime={}".format(self.local_t))
             logger.info("action={}".format(batch.a[-1,:]))
-            logger.info(" V={}".format(batch.r[-1]))
-        
-        if self.local_t % PERFORMANCE_LOG_INTERVAL == 0:
-            self._print_log(global_t)
+            logger.info("V={}".format(batch.r[-1]))
+            self.next_log_t += LOG_INTERVAL
 
         feed_dict = {
             self.local_network.base_input: batch.si,
@@ -194,24 +204,37 @@ class BaseTrainer(object):
         }
         
         # Calculate gradients and copy them to global netowrk.
-        _, loss, entropy = sess.run( [self.apply_gradients, self.local_network.total_loss, self.local_network.entropy],
+        [_, grad], policy_loss, value_loss, entropy, baseinput = sess.run( [self.apply_gradients,
+                                              self.local_network.policy_loss,
+                                              self.local_network.value_loss,
+                                              self.local_network.entropy, 
+                                              self.local_network.base_input],
                                      feed_dict=feed_dict )
-        
+                                     
+        self.ep_ploss += policy_loss
+        self.ep_vloss += value_loss
+        self.ep_entr += np.mean(entropy)
 
-
+        self.ep_grad += grad
         # add batch to experience replay
         total_ep_reward = self._add_batch_to_exp(batch)
         if total_ep_reward is not None:
-            mean_entropy = np.mean(entropy)
-            logger.debug("base loss: {} - mean_entropy: {}".format(loss,mean_entropy))
+            laststate = baseinput[np.newaxis,-1,...]
+            #logger.debug("mean base loss: {} - mean_entropy: {}".format(mean_loss,mean_entropy))
             summary_str = sess.run(summary_op, feed_dict={summary_values[0]: total_ep_reward,
-                                                            summary_values[1]: loss,
-                                                            summary_values[2]: mean_entropy})
+                                                          summary_values[1]: self.ep_ploss,
+                                                          summary_values[2]: self.ep_vloss,
+                                                          summary_values[3]: self.ep_entr,
+                                                          summary_values[4]: self.ep_grad,
+                                                          summary_values[5]: laststate})
             summary_writer.add_summary(summary_str, global_t)
             summary_writer.flush()
-        
+            self.ep_ploss = 0.
+            self.ep_vloss = 0.
+            self.ep_entr = 0.
+            self.ep_grad = 0.
+            
         # Return advanced local step size
-        #@TODO check what we are doing with the timekeeping
         diff_global_t = self.local_t - global_t
         return diff_global_t
         

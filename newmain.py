@@ -17,8 +17,9 @@ import logging
 from helper import logger_init, generate_id
 from environment.environment import Environment
 from model.model import UnrealModel
+from model.base import BaseModel
 from train.experience import Experience
-from train.rmsprop_applier import RMSPropApplier
+from train.adam_applier import AdamApplier
 from train.base_trainer import BaseTrainer
 from train.aux_trainer import AuxTrainer
 from queuer import RunnerThread
@@ -107,7 +108,7 @@ class Application(object):
         if USE_GPU:
             device = "/gpu:0"
         logger.debug("start App")
-        initial_learning_rate = 1e-5 #@TODO implement unreal method?
+        initial_learning_rate = flags.initial_learning_rate
         
         self.global_t = 0
         self.aux_t = 0
@@ -132,13 +133,17 @@ class Application(object):
         learning_rate_input = tf.placeholder("float")
         
         # Setup gradient calculator
+        """
         grad_applier = RMSPropApplier(learning_rate = learning_rate_input,
                                   decay = flags.rmsp_alpha,
                                   momentum = 0.0,
                                   epsilon = flags.rmsp_epsilon,
                                   clip_norm = flags.grad_norm_clip,
                                   device = device)
-
+        """
+        grad_applier = AdamApplier(learning_rate = learning_rate_input,
+                                   clip_norm=flags.grad_norm_clip,
+                                   device=device)
         # Start environment
         self.environment = Environment.create_environment(flags.env_type,
                                                       flags.env_name)
@@ -206,13 +211,19 @@ class Application(object):
         
         # tensorboard summary for base 
         self.score_input = tf.placeholder(tf.int32)
-        self.base_loss = tf.placeholder(tf.float32)
+        self.policy_loss = tf.placeholder(tf.float32)
+        self.value_loss = tf.placeholder(tf.float32)
         self.base_entropy = tf.placeholder(tf.float32)
+        self.base_gradient = tf.placeholder(tf.float32)
+        self.laststate = tf.placeholder(tf.float32, [1, 84, 84, 3], name="laststate")
         score = tf.summary.scalar("base/score", self.score_input)
-        loss = tf.summary.scalar("base/loss", self.base_loss)
+        policy_loss = tf.summary.scalar("base/policy_loss", self.policy_loss)
+        value_loss = tf.summary.scalar("base/value_loss", self.value_loss)
         entropy = tf.summary.scalar("base/entropy", self.base_entropy)
+        gradient = tf.summary.scalar("base/gradient", self.base_gradient)
+        laststate = tf.summary.image("base/laststate", self.laststate)
 
-        self.summary_values = [self.score_input, self.base_loss, self.base_entropy]
+        self.summary_values = [self.score_input, self.policy_loss, self.value_loss, self.base_entropy, self.base_gradient, self.laststate]
         #self.summary_op = tf.summary.merge([score,loss,entropy])
         self.summary_op = tf.summary.merge_all()
         
@@ -282,7 +293,7 @@ class Application(object):
         # set start time
         self.start_time = time.time() - self.wall_t
         # Start runner
-        self.runner.start_runner(self.sess, self.summary_writer)
+        self.runner.start_runner(self.sess)
         # Start base_network thread
         self.base_train_thread = threading.Thread(target=self.base_train_function, args=())
         self.base_train_thread.start()
@@ -326,7 +337,8 @@ class Application(object):
 
     def signal_handler(self, signal, frame):
         logger.warn('Ctrl+C detected, shutting down...')
-        self.terminate_reqested = True
+        logger.info('run_id: {} -- terminated'.format(RUN_ID))
+        self.terminate_requested = True
 
 
 def main(argv):

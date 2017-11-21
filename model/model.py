@@ -112,11 +112,15 @@ class UnrealModel(object):
         # LSTM layer
         self.base_initial_lstm_state0 = tf.placeholder(tf.float32, [1, 256])
         self.base_initial_lstm_state1 = tf.placeholder(tf.float32, [1, 256], name='bils1')
-        self.state_init = [self.base_initial_lstm_state0, self.base_initial_lstm_state1]
-        
+
         self.base_initial_lstm_state = tf.contrib.rnn.LSTMStateTuple(self.base_initial_lstm_state0,
                                                                      self.base_initial_lstm_state1)
-
+        
+        c_init = np.zeros((self.base_initial_lstm_state[0].shape), np.float32)
+        h_init = np.zeros((self.base_initial_lstm_state[1].shape), np.float32)
+        self.state_init = [c_init, h_init]
+        
+        
         self.base_lstm_outputs, self.base_lstm_state = \
             self._base_lstm_layer(base_conv_output,
                                   self.base_last_action_reward_input,
@@ -344,18 +348,18 @@ class UnrealModel(object):
         
         
         # Policy loss (output)
-        policy_loss = -tf.reduce_sum( tf.reduce_sum( tf.multiply( log_pi, self.base_a ),
+        self.policy_loss = -tf.reduce_sum( tf.reduce_sum( tf.multiply( log_pi, self.base_a ),
                                                      reduction_indices=1 ) *
-                                      self.base_adv + self.entropy * self._entropy_beta)
+                                      self.base_adv )
         
         # R (input for value target)
         self.base_r = tf.placeholder("float", [None])
         
         # Value loss (output)
         # (Learning rate for Critic is half of Actor's, so multiply by 0.5)
-        value_loss = 0.5 * tf.nn.l2_loss(self.base_r - self.base_v)
+        self.value_loss = 0.5 * tf.nn.l2_loss(self.base_r - self.base_v)
         
-        base_loss = policy_loss + value_loss
+        base_loss = self.policy_loss + self.value_loss + self.entropy * self._entropy_beta
         return base_loss
 
   
