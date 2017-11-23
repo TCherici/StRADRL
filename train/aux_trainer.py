@@ -259,7 +259,8 @@ class AuxTrainer(object):
             logger.debug("next_sync:{}".format(self.next_sync_t))
         
         aux_losses = []
-        aux_losses.append(self.local_network.base_loss)
+        aux_losses.append(self.local_network.policy_loss)
+        aux_losses.append(self.local_network.value_loss)
         batch = self._process_base(sess, self.local_network, self.gamma)
         
         feed_dict = {

@@ -127,7 +127,7 @@ class UnrealModel(object):
                                   self.base_initial_lstm_state,
                                   reuse=self.reuse_lstm)
 
-        self.base_pi = self._base_policy_layer(self.base_lstm_outputs, reuse=self.reuse_policy) # policy output
+        self.base_pi, self.base_pi_log = self._base_policy_layer(self.base_lstm_outputs, reuse=self.reuse_policy) # policy output
         self.base_v  = self._base_value_layer(self.base_lstm_outputs, reuse=self.reuse_value)  # value output
 
     
@@ -197,12 +197,14 @@ class UnrealModel(object):
             # Weight for policy output layer
             W_fc_p, b_fc_p = self._fc_variable([256, self._action_size], "base_fc_p")
             # Policy (output)
-            base_pi = tf.nn.softmax(tf.matmul(lstm_outputs, W_fc_p) + b_fc_p)
+            base_pi_linear = tf.matmul(lstm_outputs, W_fc_p) + b_fc_p
+            base_pi = tf.nn.softmax(base_pi_linear)
+            base_pi_log = tf.nn.log_softmax(base_pi_linear)
             
             # set reuse to True to make aux tasks reuse the variables
             self.reuse_policy = True
             
-            return base_pi
+            return base_pi, base_pi_log
 
 
     def _base_value_layer(self, lstm_outputs, reuse=False):
@@ -337,19 +339,10 @@ class UnrealModel(object):
         
         # Advantage (R-V) (input for policy)
         self.base_adv = tf.placeholder("float", [None])
-        
-        # Avoid NaN with clipping when value in pi becomes zero
-        log_pi = tf.log(tf.clip_by_value(self.base_pi, 1e-20, 1.0))
-        
-        # Policy entropy
-        self.entropy = -tf.reduce_sum(self.base_pi * log_pi, reduction_indices=1)
-        
-        
-        
+               
         
         # Policy loss (output)
-        self.policy_loss = -tf.reduce_sum( tf.reduce_sum( tf.multiply( log_pi, self.base_a ),
-                                                     reduction_indices=1 ) *
+        self.policy_loss = -tf.reduce_sum( tf.reduce_sum( self.base_pi_log * self.base_a, [1] ) *
                                       self.base_adv )
         
         # R (input for value target)
@@ -357,9 +350,12 @@ class UnrealModel(object):
         
         # Value loss (output)
         # (Learning rate for Critic is half of Actor's, so multiply by 0.5)
-        self.value_loss = 0.5 * tf.nn.l2_loss(self.base_r - self.base_v)
+        self.value_loss = 0.5 * tf.reduce_sum(tf.square(self.base_v - self.base_r))
         
-        base_loss = self.policy_loss + self.value_loss + self.entropy * self._entropy_beta
+        # Policy entropy
+        self.entropy = -tf.reduce_sum(self.base_pi * self.base_pi_log)
+        
+        base_loss = self.policy_loss + 0.5 * self.value_loss - self.entropy * self._entropy_beta
         return base_loss
 
   

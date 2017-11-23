@@ -147,8 +147,8 @@ def env_runner(env, sess, policy, num_local_steps, syncfunc, render):
                 #if length >= timestep_limit or not env.metadata.get('semantics.autoreset'):
                 last_state, last_action_reward = env.reset()
                 policy.reset_state()
-                last_features = policy.base_lstm_state_out
-                logger.info("Episode finished (terminal:%s). Sum of rewards: %d. Length: %d" % (terminal,rewards, length))
+                last_features = policy.get_initial_features()
+                logger.info("Ep. finish. Tot rewards: %d. Length: %d" % (rewards, length))
                 sess.run(syncfunc)
                 length = 0
                 rewards = 0

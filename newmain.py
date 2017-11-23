@@ -17,7 +17,7 @@ import logging
 from helper import logger_init, generate_id
 from environment.environment import Environment
 from model.model import UnrealModel
-from model.base import BaseModel
+#from model.base import BaseModel
 from train.experience import Experience
 from train.adam_applier import AdamApplier
 from train.base_trainer import BaseTrainer
@@ -34,7 +34,7 @@ RUN_ID = generate_id()
 TENSORBOARD_NAME = RUN_ID
 LOG_DIR = u'/tmp/StRADRL/log/'
 LOG_LEVEL = 'debug'
-NUM_AUX_WORKERS = 0
+NUM_AUX_WORKERS = 1
 CONTINUE_TRAINING = False
 
 USE_GPU = True
@@ -82,10 +82,10 @@ class Application(object):
         trainer = self.aux_trainers[aux_index]
         
         while True:
-            if self.global_t < 100:
+            if self.global_t < 500:
                 continue
             if self.stop_requested:
-                break
+                continue
             if self.terminate_requested:
                 trainer.stop()
                 break
@@ -230,9 +230,12 @@ class Application(object):
         # tensorboard summary for aux
         self.summary_aux = []
         aux_losses = []
-        self.aux_base_loss = tf.placeholder(tf.float32)
-        self.summary_aux.append(self.aux_base_loss)
-        aux_losses.append(tf.summary.scalar("aux/base_loss", self.aux_base_loss))
+        self.aux_basep_loss = tf.placeholder(tf.float32)
+        self.aux_basev_loss = tf.placeholder(tf.float32)
+        self.summary_aux.append(self.aux_basep_loss)
+        self.summary_aux.append(self.aux_basev_loss)
+        aux_losses.append(tf.summary.scalar("aux/basep_loss", self.aux_basep_loss))
+        aux_losses.append(tf.summary.scalar("aux/basev_loss", self.aux_basev_loss))
         
         if flags.use_pixel_change:
             self.pc_loss = tf.placeholder(tf.float32)

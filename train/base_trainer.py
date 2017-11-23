@@ -88,6 +88,7 @@ class BaseTrainer(object):
         self.initial_learning_rate = initial_learning_rate
         self.episode_reward = 0
         # trackers for the experience replay creation
+        self.last_state = None
         self.last_action = 0
         self.last_reward = 0
         self.ep_ploss = 0.
@@ -139,13 +140,13 @@ class BaseTrainer(object):
             global_t,  elapsed_time, steps_per_sec, steps_per_sec * 3600 / 1000000.))
     
     def _add_batch_to_exp(self, batch):
-        #logger.debug("is batch terminal? {}".format(batch.terminal))
+        # if we just started, copy the first state as last state
+        if self.last_state is None:
+                self.last_state = batch.si[0]
+                
         for k in range(len(batch.si)):
-            last_action = self.last_action
-            last_reward = self.last_reward
-            
             state = batch.si[k]
-            action = np.argmax(batch.a_r[k][:-1])
+            action = np.argmax(batch.a[k])
             reward = batch.a_r[k][-1]
             self.episode_reward += reward
             pixel_change = batch.pc[k]
@@ -154,9 +155,10 @@ class BaseTrainer(object):
                 terminal = True
             else:
                 terminal = False
-            frame = ExperienceFrame(state, reward, action, terminal, pixel_change,
-                            last_action, last_reward)
+            frame = ExperienceFrame(self.last_state, reward, action, terminal, pixel_change,
+                            self.last_action, self.last_reward)
             self.experience.add_frame(frame)
+            self.last_state = state
             self.last_action = action
             self.last_reward = reward
             
@@ -220,12 +222,13 @@ class BaseTrainer(object):
         total_ep_reward = self._add_batch_to_exp(batch)
         if total_ep_reward is not None:
             laststate = baseinput[np.newaxis,-1,...]
+            bs = batch.si.shape[0]
             #logger.debug("mean base loss: {} - mean_entropy: {}".format(mean_loss,mean_entropy))
             summary_str = sess.run(summary_op, feed_dict={summary_values[0]: total_ep_reward,
-                                                          summary_values[1]: self.ep_ploss,
-                                                          summary_values[2]: self.ep_vloss,
+                                                          summary_values[1]: self.ep_ploss/bs,
+                                                          summary_values[2]: self.ep_vloss/bs,
                                                           summary_values[3]: self.ep_entr,
-                                                          summary_values[4]: self.ep_grad,
+                                                          summary_values[4]: self.ep_grad/bs,
                                                           summary_values[5]: laststate})
             summary_writer.add_summary(summary_str, global_t)
             summary_writer.flush()
