@@ -34,7 +34,7 @@ RUN_ID = generate_id()
 TENSORBOARD_NAME = RUN_ID
 LOG_DIR = u'/tmp/StRADRL/log/'
 LOG_LEVEL = 'debug'
-NUM_AUX_WORKERS = 1
+NUM_AUX_WORKERS = 3
 CONTINUE_TRAINING = False
 
 USE_GPU = True

@@ -27,7 +27,7 @@ def get_options(option_type):
     tf.app.flags.DEFINE_integer("local_t_max", 20, "repeat step size")
 
     tf.app.flags.DEFINE_string("temp_dir", "/tmp/StRADRL/tensorboard/", "base directory for tensorboard")
-    tf.app.flags.DEFINE_float("initial_learning_rate", 1e-4, "learning rate")
+    tf.app.flags.DEFINE_float("initial_learning_rate", 1e-7, "learning rate")
     tf.app.flags.DEFINE_float("gamma", 0.99, "discount factor for rewards")
     tf.app.flags.DEFINE_float("gamma_pc", 0.9, "discount factor for pixel control")
     tf.app.flags.DEFINE_float("entropy_beta", 0.01, "entropy regurarlization constant")

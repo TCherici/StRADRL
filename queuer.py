@@ -119,7 +119,6 @@ def env_runner(env, sess, policy, num_local_steps, syncfunc, render):
         for _ in range(num_local_steps):
             fetched = policy.run_base_policy_and_value(sess, last_state, last_action_reward)
             pi, value_, features = fetched[0], fetched[1], fetched[2:]
-            
             #@TODO decide if argmax or probability, if latter fix experience replay selection
             chosenaction = boltzmann(pi)
             #chosenaction = np.argmax(pi)

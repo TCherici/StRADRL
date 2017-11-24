@@ -42,7 +42,7 @@ def process_rollout(rollout, gamma, lambda_=1.0):
     # https://arxiv.org/abs/1506.02438
     batch_adv = discount(delta_t, gamma * lambda_)
 
-    features = rollout.features[0]
+    features = rollout.features
     batch_pc = np.asarray(rollout.pixel_changes)
     return Batch(batch_si, batch_a, action_reward, batch_adv, batch_r, rollout.terminal, features, batch_pc)
 
@@ -143,19 +143,20 @@ class BaseTrainer(object):
         # if we just started, copy the first state as last state
         if self.last_state is None:
                 self.last_state = batch.si[0]
-                
+        #logger.debug("adding batch to exp. len:{}".format(len(batch.si)))
         for k in range(len(batch.si)):
             state = batch.si[k]
             action = np.argmax(batch.a[k])
             reward = batch.a_r[k][-1]
             self.episode_reward += reward
+            features = batch.features[k]
             pixel_change = batch.pc[k]
             #logger.debug("k = {} of {} -- terminal = {}".format(k,len(batch.si), batch.terminal))
             if k == len(batch.si)-1 and batch.terminal:
                 terminal = True
             else:
                 terminal = False
-            frame = ExperienceFrame(self.last_state, reward, action, terminal, pixel_change,
+            frame = ExperienceFrame(self.last_state, reward, action, terminal, features, pixel_change,
                             self.last_action, self.last_reward)
             self.experience.add_frame(frame)
             self.last_state = state
@@ -200,7 +201,7 @@ class BaseTrainer(object):
             self.local_network.base_a: batch.a,
             self.local_network.base_adv: batch.adv,
             self.local_network.base_r: batch.r,
-            self.local_network.base_initial_lstm_state: batch.features,
+            self.local_network.base_initial_lstm_state: batch.features[0],
             # [common]
             self.learning_rate_input: cur_learning_rate
         }
@@ -228,7 +229,7 @@ class BaseTrainer(object):
                                                           summary_values[1]: self.ep_ploss/bs,
                                                           summary_values[2]: self.ep_vloss/bs,
                                                           summary_values[3]: self.ep_entr,
-                                                          summary_values[4]: self.ep_grad/bs,
+                                                          summary_values[4]: self.ep_grad,
                                                           summary_values[5]: laststate})
             summary_writer.add_summary(summary_str, global_t)
             summary_writer.flush()
