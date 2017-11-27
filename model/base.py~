@@ -53,7 +53,7 @@ class BaseModel(object):
         
         with tf.device(self._device), tf.variable_scope(scope_name) as scope:
             # State (Base image input)
-            self.base_input = tf.placeholder("float", [None, self.vis_w, self.vis_h, self.ch_num], name="base_input")
+            self.base_input = tf.placeholder("float", [None, self.vis_h, self.vis_w, self.ch_num], name="base_input")
             # Conv layers
             base_conv_output = self._base_conv_layers(self.base_input)
             

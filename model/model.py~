@@ -136,7 +136,7 @@ class UnrealModel(object):
     def _base_conv_layers(self, state_input, reuse=False):
         with tf.variable_scope("base_conv", reuse=reuse) as scope:
             # Weights
-            W_conv1, b_conv1 = self._conv_variable([8, 8, self._ch_num, 16],  "base_conv1")
+            W_conv1, b_conv1 = self._conv_variable([8, 8, 3, 16],  "base_conv1")
             W_conv2, b_conv2 = self._conv_variable([4, 4, 16, 32], "base_conv2")
             
             # Nodes

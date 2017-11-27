@@ -52,7 +52,7 @@ class PartialRollout(object):
         self.pixel_changes.extend(other.pixel_changes)
 
 class RunnerThread(threading.Thread):
-    def __init__(self, env, global_net, action_size, visinput, entropy_beta, device, num_local_steps, visualise):
+    def __init__(self, env, global_net, action_size, entropy_beta, device, num_local_steps, visualise):
         threading.Thread.__init__(self)
         self.queue = queue.Queue(QUEUE_LENGTH)        
         self.num_local_steps = num_local_steps

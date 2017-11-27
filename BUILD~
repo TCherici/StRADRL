@@ -8,7 +8,7 @@ env_args = [
 py_binary(
     name = "train",
     srcs = ["main.py"],
-    args = [],
+    args = ,
     data = ["//:deepmind_lab.so"],
     main = "main.py"
 )

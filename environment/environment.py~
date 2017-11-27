@@ -15,7 +15,7 @@ class Environment(object):
   def create_environment(env_type, env_name, visinput):
     if env_type == 'maze':
       from . import maze_environment
-      return maze_environment.MazeEnvironment(visinput)
+      return maze_environment.MazeEnvironment()
     elif env_type == 'lab':
       from . import lab_environment
       return lab_environment.LabEnvironment(env_name, visinput)

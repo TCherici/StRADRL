@@ -37,6 +37,7 @@ class AuxTrainer(object):
                 initial_learning_rate,
                 learning_rate_input,
                 grad_applier,
+                visinput,
                 aux_t,
                 env_type,
                 env_name,
@@ -66,6 +67,7 @@ class AuxTrainer(object):
         self.action_size = Environment.get_action_size(env_type, env_name)
         self.thread_index = thread_index
         self.local_network = UnrealModel(self.action_size,
+                                         visinput,
                                          self.thread_index,
                                          0.,
                                          device,

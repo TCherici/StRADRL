@@ -94,10 +94,9 @@ class LabEnvironment(environment.Environment):
     self.conn.send([COMMAND_RESET, 0])
     obs = self.conn.recv()
     #logger.debug("obs: {}".format(obs))
+    logger.debug("obs.shape: {}".format(obs.shape))
     
     self.last_state = self._preprocess_frame(obs, self.num_ch)
-    
-    logger.debug("processed obs shape: {}".format(self.last_state.shape))
     self.last_action = 0
     self.last_reward = 0
     last_action_reward = np.zeros([self.action_size+1])
