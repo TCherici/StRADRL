@@ -34,6 +34,7 @@ logger = logging.getLogger('StRADRL.newmain')
 RUN_ID = generate_id()
 TENSORBOARD_NAME = RUN_ID
 LOG_LEVEL = 'debug'
+NUM_AUX_WORKERS = 3
 CONTINUE_TRAINING = False
 
 USE_GPU = False
