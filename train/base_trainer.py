@@ -196,7 +196,8 @@ class BaseTrainer(object):
             logger.info("action={}".format(batch.a[-1,:]))
             logger.info("V={}".format(batch.r[-1]))
             self.next_log_t += LOG_INTERVAL
-
+        
+        #logger.debug("si:{}".format(batch.si.shape))
         feed_dict = {
             self.local_network.base_input: batch.si,
             self.local_network.base_last_action_reward_input: batch.a_r,

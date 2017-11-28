@@ -32,11 +32,14 @@ logger = logging.getLogger('StRADRL.newmain')
 
 
 RUN_ID = generate_id()
-TENSORBOARD_NAME = RUN_ID
+if flags.training_name:
+    TRAINING_NAME = flags.training_name
+else:
+    TRAINING_NAME = RUN_ID
 LOG_LEVEL = 'debug'
 CONTINUE_TRAINING = False
 
-USE_GPU = False
+USE_GPU = True
 visualise = False
 
 
@@ -220,7 +223,7 @@ class Application(object):
         self.value_loss = tf.placeholder(tf.float32)
         self.base_entropy = tf.placeholder(tf.float32)
         self.base_gradient = tf.placeholder(tf.float32)
-        self.laststate = tf.placeholder(tf.float32, [1, flags.vis_w, flags.vis_h, 3], name="laststate")
+        self.laststate = tf.placeholder(tf.float32, [1, flags.vis_w, flags.vis_h, len(flags.vision)], name="laststate")
         score = tf.summary.scalar("base/score", self.score_input)
         policy_loss = tf.summary.scalar("base/policy_loss", self.policy_loss)
         value_loss = tf.summary.scalar("base/value_loss", self.value_loss)
@@ -262,10 +265,10 @@ class Application(object):
         self.summary_op_aux = tf.summary.merge(aux_losses)
         
         #self.summary_op = tf.summary.merge_all()
-        tensorboard_path = flags.temp_dir+TENSORBOARD_NAME+"/"
+        tensorboard_path = flags.temp_dir+TRAINING_NAME+"/"
         logger.info("tensorboard path:"+tensorboard_path)
         if not os.path.exists(tensorboard_path):
-            os.mkdir(tensorboard_path)
+            os.makedirs(tensorboard_path)
         self.summary_writer = tf.summary.FileWriter(tensorboard_path)
         self.summary_writer.add_graph(self.sess.graph)
 
@@ -345,7 +348,7 @@ class Application(object):
 
     def signal_handler(self, signal, frame):
         logger.warn('Ctrl+C detected, shutting down...')
-        logger.info('run_id: {} -- terminated'.format(RUN_ID))
+        logger.info('run name: {} -- terminated'.format(TRAINING_NAME))
         self.terminate_requested = True
 
 
@@ -354,7 +357,7 @@ def main(argv):
     app.run()
 
 if __name__ == '__main__':
-    logger = logger_init(flags.log_dir+RUN_ID+'/', RUN_ID, loglevel=LOG_LEVEL)
+    logger = logger_init(flags.log_dir+TRAINING_NAME+'/', TRAINING_NAME, loglevel=LOG_LEVEL)
     
     tf.app.run()
     

@@ -128,7 +128,7 @@ class LabEnvironment(environment.Environment):
     
   def _preprocess_frame(self, image, channels=3):
     if channels == 1:
-        image = image[...,:1]
+        image = image[...,3:]
     elif channels == 3:
         image = image[...,:3]
     image = image.astype(np.float32)
