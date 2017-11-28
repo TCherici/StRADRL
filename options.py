@@ -25,15 +25,16 @@ def get_options(option_type):
 
   # For training
   if option_type == 'training':
-    tf.app.flags.DEFINE_integer("parallel_size", 1, "parallel thread size")
+    tf.app.flags.DEFINE_string("training_name","noaux_D_1e-4_noentr","name of next training in log")
+    tf.app.flags.DEFINE_integer("parallel_size", 0, "parallel thread size")
     tf.app.flags.DEFINE_integer("local_t_max", 20, "repeat step size")
 
     tf.app.flags.DEFINE_string("temp_dir", "/tmp/StRADRL/tensorboard/", "base directory for tensorboard")
     tf.app.flags.DEFINE_string("log_dir", "/tmp/StRADRL/log/", "base directory for logs")
-    tf.app.flags.DEFINE_float("initial_learning_rate", 1e-7, "learning rate")
+    tf.app.flags.DEFINE_float("initial_learning_rate", 1e-4, "learning rate")
     tf.app.flags.DEFINE_float("gamma", 0.99, "discount factor for rewards")
     tf.app.flags.DEFINE_float("gamma_pc", 0.9, "discount factor for pixel control")
-    tf.app.flags.DEFINE_float("entropy_beta", 0.01, "entropy regurarlization constant")
+    tf.app.flags.DEFINE_float("entropy_beta", 0.0, "entropy regurarlization constant")
     tf.app.flags.DEFINE_float("pixel_change_lambda", 0.0001, "pixel change lambda") # 0.05, 0.01 ~ 0.1 for lab, 0.0001 ~ 0.01 for gym
     tf.app.flags.DEFINE_float("temporal_coherence_lambda", 10., "temporal coherence lambda") #@TODO check values
     tf.app.flags.DEFINE_integer("experience_history_size", 2000, "experience replay buffer size")
