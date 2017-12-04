@@ -95,8 +95,9 @@ class BaseTrainer(object):
         self.last_reward = 0
         self.ep_ploss = 0.
         self.ep_vloss = 0.
-        self.ep_entr = 0.
-        self.ep_grad = 0.
+        self.ep_entr = []
+        self.ep_grad = []
+        self.ep_l = 0
         
     
     def _anneal_learning_rate(self, global_time_step):
@@ -216,30 +217,30 @@ class BaseTrainer(object):
                                               self.local_network.entropy, 
                                               self.local_network.base_input],
                                      feed_dict=feed_dict )
-                                     
+        self.ep_l += batch.si.shape[0]
         self.ep_ploss += policy_loss
         self.ep_vloss += value_loss
-        self.ep_entr += np.mean(entropy)
+        self.ep_entr.append(entropy)
 
-        self.ep_grad += grad
+        self.ep_grad.append(grad)
         # add batch to experience replay
         total_ep_reward = self._add_batch_to_exp(batch)
         if total_ep_reward is not None:
             laststate = baseinput[np.newaxis,-1,...]
-            bs = batch.si.shape[0]
             #logger.debug("mean base loss: {} - mean_entropy: {}".format(mean_loss,mean_entropy))
             summary_str = sess.run(summary_op, feed_dict={summary_values[0]: total_ep_reward,
-                                                          summary_values[1]: self.ep_ploss/bs,
-                                                          summary_values[2]: self.ep_vloss/bs,
-                                                          summary_values[3]: self.ep_entr,
-                                                          summary_values[4]: self.ep_grad,
+                                                          summary_values[1]: self.ep_ploss/self.ep_l,
+                                                          summary_values[2]: self.ep_vloss/self.ep_l,
+                                                          summary_values[3]: np.mean(self.ep_entr),
+                                                          summary_values[4]: np.mean(self.ep_grad),
                                                           summary_values[5]: laststate})
             summary_writer.add_summary(summary_str, global_t)
             summary_writer.flush()
+            self.ep_l = 0
             self.ep_ploss = 0.
             self.ep_vloss = 0.
-            self.ep_entr = 0.
-            self.ep_grad = 0.
+            self.ep_entr = []
+            self.ep_grad = []
             
         # Return advanced local step size
         diff_global_t = self.local_t - global_t
