@@ -29,13 +29,16 @@ class BaseModel(object):
     Base A3C model (no RNN)
     """
     def __init__(self,
-                    ch_num,
-                    action_size,
-                    thread_index, 
-                    entropy_beta,
-                    device):
+                 visinput,
+                 action_size,
+                 thread_index, 
+                 entropy_beta,
+                 device)
+
         self._device = device
-        self.ch_num = ch_num
+        self.ch_num = len(visinput[0]) # ch_num is 1 if D, 3 if RGB, 4 if RGBD
+        self.vis_h = visinput[1]
+        self.vis_w = visinput[2]
         self._action_size = action_size
         self._thread_index = thread_index
         self._entropy_beta = entropy_beta
@@ -51,7 +54,7 @@ class BaseModel(object):
         
         with tf.device(self._device), tf.variable_scope(scope_name) as scope:
             # State (Base image input)
-            self.base_input = tf.placeholder("float", [None, 84, 84, self.ch_num], name="base_input")
+            self.base_input = tf.placeholder("float", [None, self.vis_w, self.vis_h, self.ch_num], name="base_input")
             # Conv layers
             base_conv_output = self._base_conv_layers(self.base_input)
             

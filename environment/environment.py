@@ -12,16 +12,16 @@ class Environment(object):
   action_size = -1
   
   @staticmethod
-  def create_environment(env_type, env_name):
+  def create_environment(env_type, env_name, visinput):
     if env_type == 'maze':
-      from . import maze_environment
-      return maze_environment.MazeEnvironment()
+      from . import maze_environment_pro
+      return maze_environment_pro.MazeEnvironment()
     elif env_type == 'lab':
       from . import lab_environment
-      return lab_environment.LabEnvironment(env_name)
+      return lab_environment.LabEnvironment(env_name, visinput)
     else:
       from . import gym_environment
-      return gym_environment.GymEnvironment(env_name)
+      return gym_environment.GymEnvironment(env_name, visinput)
   
   @staticmethod
   def get_action_size(env_type, env_name):
@@ -29,9 +29,9 @@ class Environment(object):
       return Environment.action_size
 
     if env_type == 'maze':
-      from . import maze_environment
+      from . import maze_environment_pro
       Environment.action_size = \
-        maze_environment.MazeEnvironment.get_action_size()
+        maze_environment_pro.MazeEnvironment.get_action_size()
     elif env_type == "lab":
       from . import lab_environment
       Environment.action_size = \

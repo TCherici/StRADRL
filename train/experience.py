@@ -11,11 +11,12 @@ from collections import deque
 logger = logging.getLogger("StRADRL.experience")
 
 class ExperienceFrame(object):
-  def __init__(self, state, reward, action, terminal, pixel_change, last_action, last_reward):
+  def __init__(self, state, reward, action, terminal, features, pixel_change, last_action, last_reward):
     self.state = state
     self.action = action # (Taken action with the 'state')
     self.reward = np.clip(reward, -1, 1) # Received reward with the 'state'. (Clipped)
     self.terminal = terminal # (Whether terminated when 'state' was inputted)
+    self.features = features # LSTM C and H memory states to be used to start
     self.pixel_change = pixel_change
     self.last_action = last_action # (After this last action was taken, agent move to the 'state')
     self.last_reward = np.clip(last_reward, -1, 1) # (After this last reward was received, agent move to the 'state') (Clipped)

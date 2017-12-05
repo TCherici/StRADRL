@@ -12,21 +12,25 @@ def get_options(option_type):
     'training' or 'diplay' or 'visualize'
   """
   # Common
-  tf.app.flags.DEFINE_string("env_type", "lab", "environment type (lab or gym or maze)")
+  tf.app.flags.DEFINE_string("env_type", "maze", "environment type (lab or gym or maze)")
   tf.app.flags.DEFINE_string("env_name", "nav_maze_static_01",  "environment name")
   tf.app.flags.DEFINE_boolean("use_pixel_change", False, "whether to use pixel change")
   tf.app.flags.DEFINE_boolean("use_value_replay", False, "whether to use value function replay")
   tf.app.flags.DEFINE_boolean("use_reward_prediction", False, "whether to use reward prediction")
-  tf.app.flags.DEFINE_boolean("use_temporal_coherence", False, "wheter to use temporal coherence")
-
+  tf.app.flags.DEFINE_boolean("use_temporal_coherence", False, "whether to use temporal coherence")
+  tf.app.flags.DEFINE_string("vision", "RGB", "visual input to use (RGB, D, RGBD)")
+  tf.app.flags.DEFINE_integer("vis_h", 84, "input image height in pixels")
+  tf.app.flags.DEFINE_integer("vis_w", 84, "input image width in pixels")
   tf.app.flags.DEFINE_string("checkpoint_dir", "/tmp/StRADRL/checkpoints", "checkpoint directory")
 
   # For training
   if option_type == 'training':
-    tf.app.flags.DEFINE_integer("parallel_size", 1, "parallel thread size")
+    tf.app.flags.DEFINE_string("training_name","mazepro_noaux_1e-4","name of next training in log")
+    tf.app.flags.DEFINE_integer("parallel_size", 0, "parallel thread size")
     tf.app.flags.DEFINE_integer("local_t_max", 20, "repeat step size")
 
     tf.app.flags.DEFINE_string("temp_dir", "/tmp/StRADRL/tensorboard/", "base directory for tensorboard")
+    tf.app.flags.DEFINE_string("log_dir", "/tmp/StRADRL/log/", "base directory for logs")
     tf.app.flags.DEFINE_float("initial_learning_rate", 1e-4, "learning rate")
     tf.app.flags.DEFINE_float("gamma", 0.99, "discount factor for rewards")
     tf.app.flags.DEFINE_float("gamma_pc", 0.9, "discount factor for pixel control")

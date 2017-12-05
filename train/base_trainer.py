@@ -41,6 +41,7 @@ def process_rollout(rollout, gamma, lambda_=1.0):
     # https://arxiv.org/abs/1506.02438
     batch_adv = discount(delta_t, gamma * lambda_)
 
+    features = rollout.features
     batch_pc = np.asarray(rollout.pixel_changes)
     return Batch(batch_si, batch_a, batch_adv, batch_r, rollout.terminal, batch_pc)
 
@@ -54,6 +55,7 @@ class BaseTrainer(object):
                initial_learning_rate,
                learning_rate_input,
                grad_applier,
+               visinput,
                env_type,
                env_name,
                entropy_beta,
@@ -68,11 +70,12 @@ class BaseTrainer(object):
         self.gamma = gamma
         self.max_global_time_step = max_global_time_step
         self.action_size = Environment.get_action_size(env_type, env_name)
-        self.local_network = BaseModel(3,
-                                       self.action_size,
-                                       1,
-                                       entropy_beta,
-                                       device)
+        self.local_network = UnrealModel(self.action_size,
+                                         visinput,
+                                         1,
+                                         entropy_beta,
+                                         device)
+
         self.local_network.prepare_loss()
         
         self.apply_gradients = grad_applier.minimize_local(self.local_network.total_loss,
@@ -87,12 +90,14 @@ class BaseTrainer(object):
         self.initial_learning_rate = initial_learning_rate
         self.episode_reward = 0
         # trackers for the experience replay creation
+        self.last_state = None
         self.last_action = 0
         self.last_reward = 0
         self.ep_ploss = 0.
         self.ep_vloss = 0.
-        self.ep_entr = 0.
-        self.ep_grad = 0.
+        self.ep_entr = []
+        self.ep_grad = []
+        self.ep_l = 0
         
     
     def _anneal_learning_rate(self, global_time_step):
@@ -138,21 +143,28 @@ class BaseTrainer(object):
             global_t,  elapsed_time, steps_per_sec, steps_per_sec * 3600 / 1000000.))
     
     def _add_batch_to_exp(self, batch):
-        #logger.debug("is batch terminal? {}".format(batch.terminal))
-        for k in range(len(batch.si)):            
+        # if we just started, copy the first state as last state
+        if self.last_state is None:
+                self.last_state = batch.si[0]
+        #logger.debug("adding batch to exp. len:{}".format(len(batch.si)))
+        for k in range(len(batch.si)):
             state = batch.si[k]
-            action = batch.a[k]
-            reward = batch.r[k]
+            action = np.argmax(batch.a[k])
+            reward = batch.a_r[k][-1]
+
             self.episode_reward += reward
+            features = batch.features[k]
             pixel_change = batch.pc[k]
             #logger.debug("k = {} of {} -- terminal = {}".format(k,len(batch.si), batch.terminal))
             if k == len(batch.si)-1 and batch.terminal:
                 terminal = True
             else:
                 terminal = False
-            frame = ExperienceFrame(state, reward, action, terminal, pixel_change,
+            frame = ExperienceFrame(self.last_state, reward, action, terminal, features, pixel_change,
+
                             self.last_action, self.last_reward)
             self.experience.add_frame(frame)
+            self.last_state = state
             self.last_action = action
             self.last_reward = reward
             
@@ -187,12 +199,14 @@ class BaseTrainer(object):
             logger.info("action={}".format(batch.a[-1,:]))
             logger.info("V={}".format(batch.r[-1]))
             self.next_log_t += LOG_INTERVAL
-
+        
+        #logger.debug("si:{}".format(batch.si.shape))
         feed_dict = {
             self.local_network.base_input: batch.si,
             self.local_network.base_a: batch.a,
             self.local_network.base_adv: batch.adv,
             self.local_network.base_r: batch.r,
+            self.local_network.base_initial_lstm_state: batch.features[0],
             # [common]
             self.learning_rate_input: cur_learning_rate
         }
@@ -204,29 +218,30 @@ class BaseTrainer(object):
                                               self.local_network.entropy, 
                                               self.local_network.base_input],
                                      feed_dict=feed_dict )
-                                     
+        self.ep_l += batch.si.shape[0]
         self.ep_ploss += policy_loss
         self.ep_vloss += value_loss
-        self.ep_entr += np.mean(entropy)
+        self.ep_entr.append(entropy)
 
-        self.ep_grad += grad
+        self.ep_grad.append(grad)
         # add batch to experience replay
         total_ep_reward = self._add_batch_to_exp(batch)
         if total_ep_reward is not None:
             laststate = baseinput[np.newaxis,-1,...]
             #logger.debug("mean base loss: {} - mean_entropy: {}".format(mean_loss,mean_entropy))
             summary_str = sess.run(summary_op, feed_dict={summary_values[0]: total_ep_reward,
-                                                          summary_values[1]: self.ep_ploss,
-                                                          summary_values[2]: self.ep_vloss,
-                                                          summary_values[3]: self.ep_entr,
-                                                          summary_values[4]: self.ep_grad,
+                                                          summary_values[1]: self.ep_ploss/self.ep_l,
+                                                          summary_values[2]: self.ep_vloss/self.ep_l,
+                                                          summary_values[3]: np.mean(self.ep_entr),
+                                                          summary_values[4]: np.mean(self.ep_grad),
                                                           summary_values[5]: laststate})
             summary_writer.add_summary(summary_str, global_t)
             summary_writer.flush()
+            self.ep_l = 0
             self.ep_ploss = 0.
             self.ep_vloss = 0.
-            self.ep_entr = 0.
-            self.ep_grad = 0.
+            self.ep_entr = []
+            self.ep_grad = []
             
         # Return advanced local step size
         diff_global_t = self.local_t - global_t

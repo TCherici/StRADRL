@@ -37,6 +37,7 @@ class AuxTrainer(object):
                 initial_learning_rate,
                 learning_rate_input,
                 grad_applier,
+                visinput,
                 aux_t,
                 env_type,
                 env_name,
@@ -66,6 +67,7 @@ class AuxTrainer(object):
         self.action_size = Environment.get_action_size(env_type, env_name)
         self.thread_index = thread_index
         self.local_network = UnrealModel(self.action_size,
+                                         visinput,
                                          self.thread_index,
                                          0.,
                                          device,
@@ -112,8 +114,12 @@ class AuxTrainer(object):
         last_action_reward = experience_frames[0].concat_action_and_reward(experience_frames[0].action,
                                                                         self.action_size,
                                                                         experience_frames[0].reward)
+        policy.set_state(np.asarray(experience_frames[0].features).reshape([2,1,-1]))
+            
+        
         for frame in range(1,len(experience_frames)):
             state = experience_frames[frame].state
+            #logger.debug("state:{}".format(state.shape))
             batch_si.append(state)
             action = experience_frames[frame].action
             reward = experience_frames[frame].reward
@@ -259,7 +265,8 @@ class AuxTrainer(object):
             logger.debug("next_sync:{}".format(self.next_sync_t))
         
         aux_losses = []
-        aux_losses.append(self.local_network.base_loss)
+        aux_losses.append(self.local_network.policy_loss)
+        aux_losses.append(self.local_network.value_loss)
         batch = self._process_base(sess, self.local_network, self.gamma)
         
         feed_dict = {
@@ -336,9 +343,9 @@ class AuxTrainer(object):
             for k in range(len(losses)):
                 feed_dict_aux.update({summary_aux[k]:losses[k]})
             summary_str = sess.run(summary_op_aux, feed_dict=feed_dict_aux)
-            summary_writer.add_summary(summary_str, global_t)
+            summary_writer.add_summary(summary_str, aux_t)
             summary_writer.flush()
         
-        self.local_t += len(batch.r)
+        self.local_t += len(batch.si)
         return len(batch.r)
 

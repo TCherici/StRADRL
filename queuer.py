@@ -50,17 +50,21 @@ class PartialRollout(object):
         self.pixel_changes.extend(other.pixel_changes)
 
 class RunnerThread(threading.Thread):
-    def __init__(self, env, global_net, action_size, entropy_beta, device, num_local_steps, visualise):
+    def __init__(self, env, global_net, action_size, visinput, entropy_beta, device, num_local_steps, visualise):
         threading.Thread.__init__(self)
         self.queue = queue.Queue(QUEUE_LENGTH)        
         self.num_local_steps = num_local_steps
         self.env = env
-        self.policy = BaseModel(3,
-                                action_size,
-                                0,
-                                entropy_beta,
-                                device)
+
+        self.last_features = None
+        self.policy = UnrealModel(action_size,
+                                  visinput,
+                                  0,
+                                  entropy_beta,
+                                  device)
+
         self.global_net = global_net
+
         self.sess = None
         self.visualise = visualise
         self.sync = self.policy.sync_from#(global_net, name="net_0")
@@ -115,9 +119,8 @@ def env_runner(env, sess, policy, num_local_steps, syncfunc, global_net, render)
         terminal_end = False
         rollout = PartialRollout()
         for _ in range(num_local_steps):
-            fetched = policy.run_base_policy_and_value(sess, last_state)
-            pi, value_ = fetched[0], fetched[1]
-            
+            fetched = policy.run_base_policy_and_value(sess, last_state, last_action_reward)
+            pi, value_, features = fetched[0], fetched[1], fetched[2:]
             #@TODO decide if argmax or probability, if latter fix experience replay selection
             #chosenaction = boltzmann(pi)
             chosenaction = np.argmax(pi)
@@ -142,11 +145,13 @@ def env_runner(env, sess, policy, num_local_steps, syncfunc, global_net, render)
                 rollout.terminal = True
                 # the if condition below has been disabled because deepmind lab has no metadata
                 #if length >= timestep_limit or not env.metadata.get('semantics.autoreset'):
-                last_state, _ = env.reset()
-                #policy.reset_state()
+
+                last_state, last_action_reward = env.reset()
+                policy.reset_state()
+                last_features = policy.get_initial_features()
                 logger.info("Ep. finished. \nTot rewards: %d. Length: %d. Value: %f" % (rewards, length, value_))
-                #logger.debug(syncfunc)
                 sess.run(syncfunc(global_net, name="env_runner_net"))
+
                 length = 0
                 rewards = 0
                 break

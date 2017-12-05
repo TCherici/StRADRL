@@ -31,6 +31,7 @@ class UnrealModel(object):
     """
     def __init__(self,
                 action_size,
+                visinput,
                 thread_index, # -1 for global
                 entropy_beta,
                 device,
@@ -44,6 +45,7 @@ class UnrealModel(object):
                 use_base=True):
         self._device = device
         self._action_size = action_size
+        self._ch_num = len(visinput[0])
         self._thread_index = thread_index
         self._use_pixel_change = use_pixel_change
         self._use_value_replay = use_value_replay
@@ -101,7 +103,7 @@ class UnrealModel(object):
 
     def _create_base_network(self):
         # State (Base image input)
-        self.base_input = tf.placeholder("float", [None, 84, 84, 3], name="base_input")
+        self.base_input = tf.placeholder("float", [None, 84, 84, self._ch_num], name="base_input")
 
         # Last action and reward
         self.base_last_action_reward_input = tf.placeholder("float", [None, self._action_size+1])
@@ -127,14 +129,14 @@ class UnrealModel(object):
                                   self.base_initial_lstm_state,
                                   reuse=self.reuse_lstm)
 
-        self.base_pi = self._base_policy_layer(self.base_lstm_outputs, reuse=self.reuse_policy) # policy output
+        self.base_pi, self.base_pi_log = self._base_policy_layer(self.base_lstm_outputs, reuse=self.reuse_policy) # policy output
         self.base_v  = self._base_value_layer(self.base_lstm_outputs, reuse=self.reuse_value)  # value output
 
     
     def _base_conv_layers(self, state_input, reuse=False):
         with tf.variable_scope("base_conv", reuse=reuse) as scope:
             # Weights
-            W_conv1, b_conv1 = self._conv_variable([8, 8, 3, 16],  "base_conv1")
+            W_conv1, b_conv1 = self._conv_variable([8, 8, self._ch_num, 16],  "base_conv1")
             W_conv2, b_conv2 = self._conv_variable([4, 4, 16, 32], "base_conv2")
             
             # Nodes
@@ -197,12 +199,14 @@ class UnrealModel(object):
             # Weight for policy output layer
             W_fc_p, b_fc_p = self._fc_variable([256, self._action_size], "base_fc_p")
             # Policy (output)
-            base_pi = tf.nn.softmax(tf.matmul(lstm_outputs, W_fc_p) + b_fc_p)
+            base_pi_linear = tf.matmul(lstm_outputs, W_fc_p) + b_fc_p
+            base_pi = tf.nn.softmax(base_pi_linear)
+            base_pi_log = tf.nn.log_softmax(base_pi_linear)
             
             # set reuse to True to make aux tasks reuse the variables
             self.reuse_policy = True
             
-            return base_pi
+            return base_pi, base_pi_log
 
 
     def _base_value_layer(self, lstm_outputs, reuse=False):
@@ -222,7 +226,7 @@ class UnrealModel(object):
 
     def _create_pc_network(self):
         # State (Image input) 
-        self.pc_input = tf.placeholder("float", [None, 84, 84, 3])
+        self.pc_input = tf.placeholder("float", [None, 84, 84, self._ch_num])
 
         # Last action and reward
         self.pc_last_action_reward_input = tf.placeholder("float", [None, self._action_size+1])
@@ -281,7 +285,7 @@ class UnrealModel(object):
 
     def _create_vr_network(self):
         # State (Image input)
-        self.vr_input = tf.placeholder("float", [None, 84, 84, 3])
+        self.vr_input = tf.placeholder("float", [None, 84, 84, self._ch_num])
 
         # Last action and reward
         self.vr_last_action_reward_input = tf.placeholder("float", [None, self._action_size+1])
@@ -302,7 +306,7 @@ class UnrealModel(object):
 
     
     def _create_rp_network(self):
-        self.rp_input = tf.placeholder("float", [3, 84, 84, 3])
+        self.rp_input = tf.placeholder("float", [3, 84, 84, self._ch_num])
 
         # RP conv layers
         rp_conv_output = self._base_conv_layers(self.rp_input, reuse=self.reuse_conv)
@@ -319,8 +323,8 @@ class UnrealModel(object):
     # temporal coherence
     def _create_tc_network(self):
         # State (Image input)
-        self.tc_input1 = tf.placeholder("float", [None, 84, 84, 3], name="tc_input1")
-        self.tc_input2 = tf.placeholder("float", [None, 84, 84, 3], name="tc_input2")
+        self.tc_input1 = tf.placeholder("float", [None, 84, 84, self._ch_num], name="tc_input1")
+        self.tc_input2 = tf.placeholder("float", [None, 84, 84, self._ch_num], name="tc_input2")
         
         # tc conv layers
         tc_output1 = self._base_conv_layers(self.tc_input1, reuse=self.reuse_conv)
@@ -337,19 +341,10 @@ class UnrealModel(object):
         
         # Advantage (R-V) (input for policy)
         self.base_adv = tf.placeholder("float", [None])
-        
-        # Avoid NaN with clipping when value in pi becomes zero
-        log_pi = tf.log(tf.clip_by_value(self.base_pi, 1e-20, 1.0))
-        
-        # Policy entropy
-        self.entropy = -tf.reduce_sum(self.base_pi * log_pi, reduction_indices=1)
-        
-        
-        
+               
         
         # Policy loss (output)
-        self.policy_loss = -tf.reduce_sum( tf.reduce_sum( tf.multiply( log_pi, self.base_a ),
-                                                     reduction_indices=1 ) *
+        self.policy_loss = -tf.reduce_sum( tf.reduce_sum( self.base_pi_log * self.base_a, [1] ) *
                                       self.base_adv )
         
         # R (input for value target)
@@ -357,9 +352,12 @@ class UnrealModel(object):
         
         # Value loss (output)
         # (Learning rate for Critic is half of Actor's, so multiply by 0.5)
-        self.value_loss = 0.5 * tf.nn.l2_loss(self.base_r - self.base_v)
+        self.value_loss = 0.5 * tf.reduce_sum(tf.square(self.base_v - self.base_r))
         
-        base_loss = self.policy_loss + self.value_loss + self.entropy * self._entropy_beta
+        # Policy entropy
+        self.entropy = -tf.reduce_sum(self.base_pi * self.base_pi_log)
+        
+        base_loss = self.policy_loss + 0.5 * self.value_loss - self.entropy * self._entropy_beta
         return base_loss
 
   
@@ -431,6 +429,9 @@ class UnrealModel(object):
     def reset_state(self):
         self.base_lstm_state_out = tf.contrib.rnn.LSTMStateTuple(np.zeros([1, 256]),
                                                              np.zeros([1, 256]))
+                                                             
+    def set_state(self, features):
+        self.base_lstm_state_out = features#tf.contrib.rnn.LSTMStateTuple(features[0],features[1])
 
     def run_base_policy_and_value(self, sess, s_t, last_action_reward):
         # This run_base_policy_and_value() is used when forward propagating.

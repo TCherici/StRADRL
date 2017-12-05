@@ -8,7 +8,7 @@ env_args = [
 py_binary(
     name = "train",
     srcs = ["main.py"],
-    args = env_args,
+    args = [],
     data = ["//:deepmind_lab.so"],
     main = "main.py"
 )
@@ -34,12 +34,4 @@ py_test(
     srcs = ["test.py"],
     main = "test.py",
     deps = [":train"],
-)
-
-py_binary(
-    name = "newtrain",
-    srcs = ["newmain.py"],
-    args = env_args,
-    data = ["//:deepmind_lab.so"],
-    main = "newmain.py"
 )
