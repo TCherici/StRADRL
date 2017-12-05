@@ -14,16 +14,16 @@ import six.moves.queue as queue
 from collections import namedtuple
 
 from environment.environment import Environment
-from model.model import UnrealModel
+from model.base import BaseModel
 from train.experience import Experience, ExperienceFrame
 
 logger = logging.getLogger("StRADRL.base_trainer")
 
 SYNC_INTERVAL = 1000
-LOG_INTERVAL = 1000
-PERFORMANCE_LOG_INTERVAL = 1000
+LOG_INTERVAL = 10000
+PERFORMANCE_LOG_INTERVAL = 10000
 
-Batch = namedtuple("Batch", ["si", "a", "a_r", "adv", "r", "terminal", "features", "pc"])
+Batch = namedtuple("Batch", ["si", "a", "adv", "r", "terminal", "pc"])
 
 def process_rollout(rollout, gamma, lambda_=1.0):
     """
@@ -32,7 +32,6 @@ def process_rollout(rollout, gamma, lambda_=1.0):
     batch_si = np.asarray(rollout.states)
     batch_a = np.asarray(rollout.actions)
     rewards = np.asarray(rollout.rewards)
-    action_reward = np.concatenate((batch_a,rewards[:,np.newaxis]), axis=1)
     vpred_t = np.asarray(rollout.values + [rollout.r])
 
     rewards_plus_v = np.asarray(rollout.rewards + [rollout.r])
@@ -42,9 +41,8 @@ def process_rollout(rollout, gamma, lambda_=1.0):
     # https://arxiv.org/abs/1506.02438
     batch_adv = discount(delta_t, gamma * lambda_)
 
-    features = rollout.features[0]
     batch_pc = np.asarray(rollout.pixel_changes)
-    return Batch(batch_si, batch_a, action_reward, batch_adv, batch_r, rollout.terminal, features, batch_pc)
+    return Batch(batch_si, batch_a, batch_adv, batch_r, rollout.terminal, batch_pc)
 
 def discount(x, gamma):
     return scipy.signal.lfilter([1], [1, -gamma], x[::-1], axis=0)[::-1]
@@ -70,24 +68,31 @@ class BaseTrainer(object):
         self.gamma = gamma
         self.max_global_time_step = max_global_time_step
         self.action_size = Environment.get_action_size(env_type, env_name)
-        self.local_network = UnrealModel(self.action_size,
-                                         1,
-                                         entropy_beta,
-                                         device)
+        self.local_network = BaseModel(3,
+                                       self.action_size,
+                                       1,
+                                       entropy_beta,
+                                       device)
         self.local_network.prepare_loss()
         
         self.apply_gradients = grad_applier.minimize_local(self.local_network.total_loss,
                                                            global_network.get_vars(),
                                                            self.local_network.get_vars())
-        self.sync = self.local_network.sync_from(global_network)
+        self.sync = self.local_network.sync_from
         self.experience = experience
         self.local_t = 0
-        self.next_sync_t = 0
+        self.next_log_t = 0
+        self.next_performance_t = PERFORMANCE_LOG_INTERVAL
+        self.next_sync_t = SYNC_INTERVAL
         self.initial_learning_rate = initial_learning_rate
         self.episode_reward = 0
         # trackers for the experience replay creation
-        self.last_action = 0#np.zeros(self.action_size)
+        self.last_action = 0
         self.last_reward = 0
+        self.ep_ploss = 0.
+        self.ep_vloss = 0.
+        self.ep_entr = 0.
+        self.ep_grad = 0.
         
     
     def _anneal_learning_rate(self, global_time_step):
@@ -105,9 +110,9 @@ class BaseTrainer(object):
         
     def pull_batch_from_queue(self):
         """
-        self explanatory:  take a rollout from the queue of the thread runner.
+        take a rollout from the queue of the thread runner.
         """
-        #@TODO change 100 to a possible variable
+        #@TODO change 5 to a possible variable
         rollout_full = False
         count = 0
         while not rollout_full:
@@ -134,13 +139,10 @@ class BaseTrainer(object):
     
     def _add_batch_to_exp(self, batch):
         #logger.debug("is batch terminal? {}".format(batch.terminal))
-        for k in range(len(batch.si)):
-            last_action = self.last_action
-            last_reward = self.last_reward
-            
+        for k in range(len(batch.si)):            
             state = batch.si[k]
-            action = np.argmax(batch.a_r[k][:-1])
-            reward = batch.a_r[k][-1]
+            action = batch.a[k]
+            reward = batch.r[k]
             self.episode_reward += reward
             pixel_change = batch.pc[k]
             #logger.debug("k = {} of {} -- terminal = {}".format(k,len(batch.si), batch.terminal))
@@ -149,7 +151,7 @@ class BaseTrainer(object):
             else:
                 terminal = False
             frame = ExperienceFrame(state, reward, action, terminal, pixel_change,
-                            last_action, last_reward)
+                            self.last_action, self.last_reward)
             self.experience.add_frame(frame)
             self.last_action = action
             self.last_reward = reward
@@ -162,56 +164,71 @@ class BaseTrainer(object):
             return None
             
     
-    def process(self, sess, global_t, summary_writer, summary_op, summary_values):
+    def process(self, sess, global_t, global_network, summary_writer, summary_op, summary_values):
         cur_learning_rate = self._anneal_learning_rate(global_t)
         # Copy weights from shared to local
         if self.local_t >= self.next_sync_t:
-            logger.debug("Syncing to global net -- current learning rate:{}".format(cur_learning_rate))
-            logger.debug("local_t:{} - global_t:{}".format(self.local_t,global_t))
-            sess.run( self.sync )
+            #logger.debug("Syncing to global net -- current learning rate:{}".format(cur_learning_rate))
+            #logger.debug("local_t:{} - global_t:{}".format(self.local_t,global_t))
+            sess.run( self.sync(global_network, name="trainerstuff"))
             self.next_sync_t += SYNC_INTERVAL
         # get batch from process_rollout
         rollout = self.pull_batch_from_queue()
         batch = process_rollout(rollout, gamma=0.99, lambda_=1.0)
         self.local_t += len(batch.si)
-        if self.local_t % LOG_INTERVAL == 0:
+
+        
+        if self.local_t > self.next_performance_t:
+            self._print_log(global_t)
+            self.next_performance_t += PERFORMANCE_LOG_INTERVAL
+                
+        if self.local_t >= self.next_log_t:
             logger.info("localtime={}".format(self.local_t))
             logger.info("action={}".format(batch.a[-1,:]))
-            logger.info(" V={}".format(batch.r[-1]))
-        
-        if self.local_t % PERFORMANCE_LOG_INTERVAL == 0:
-            self._print_log(global_t)
+            logger.info("V={}".format(batch.r[-1]))
+            self.next_log_t += LOG_INTERVAL
 
         feed_dict = {
             self.local_network.base_input: batch.si,
-            self.local_network.base_last_action_reward_input: batch.a_r,
             self.local_network.base_a: batch.a,
             self.local_network.base_adv: batch.adv,
             self.local_network.base_r: batch.r,
-            self.local_network.base_initial_lstm_state: batch.features,
             # [common]
             self.learning_rate_input: cur_learning_rate
         }
         
-        # Calculate gradients and copy them to global netowrk.
-        _, loss, entropy = sess.run( [self.apply_gradients, self.local_network.total_loss, self.local_network.entropy],
+        # Calculate gradients and copy them to global network.
+        [_, grad], policy_loss, value_loss, entropy, baseinput = sess.run( [self.apply_gradients,
+                                              self.local_network.policy_loss,
+                                              self.local_network.value_loss,
+                                              self.local_network.entropy, 
+                                              self.local_network.base_input],
                                      feed_dict=feed_dict )
-        
+                                     
+        self.ep_ploss += policy_loss
+        self.ep_vloss += value_loss
+        self.ep_entr += np.mean(entropy)
 
-
+        self.ep_grad += grad
         # add batch to experience replay
         total_ep_reward = self._add_batch_to_exp(batch)
         if total_ep_reward is not None:
-            mean_entropy = np.mean(entropy)
-            logger.debug("base loss: {} - mean_entropy: {}".format(loss,mean_entropy))
+            laststate = baseinput[np.newaxis,-1,...]
+            #logger.debug("mean base loss: {} - mean_entropy: {}".format(mean_loss,mean_entropy))
             summary_str = sess.run(summary_op, feed_dict={summary_values[0]: total_ep_reward,
-                                                            summary_values[1]: loss,
-                                                            summary_values[2]: mean_entropy})
+                                                          summary_values[1]: self.ep_ploss,
+                                                          summary_values[2]: self.ep_vloss,
+                                                          summary_values[3]: self.ep_entr,
+                                                          summary_values[4]: self.ep_grad,
+                                                          summary_values[5]: laststate})
             summary_writer.add_summary(summary_str, global_t)
             summary_writer.flush()
-        
+            self.ep_ploss = 0.
+            self.ep_vloss = 0.
+            self.ep_entr = 0.
+            self.ep_grad = 0.
+            
         # Return advanced local step size
-        #@TODO check what we are doing with the timekeeping
         diff_global_t = self.local_t - global_t
         return diff_global_t
         
