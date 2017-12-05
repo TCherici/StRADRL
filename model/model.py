@@ -501,7 +501,7 @@ class UnrealModel(object):
         dst_vars = self.get_vars()
 
         sync_ops = []
-
+        logger.debug("sync:{}".format(name))
         with tf.device(self._device):
             with tf.name_scope(name, "UnrealModel",[]) as name:
                 for(src_var, dst_var) in zip(src_vars, dst_vars):

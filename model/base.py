@@ -33,7 +33,7 @@ class BaseModel(object):
                  action_size,
                  thread_index, 
                  entropy_beta,
-                 device)
+                 device):
 
         self._device = device
         self.ch_num = len(visinput[0]) # ch_num is 1 if D, 3 if RGB, 4 if RGBD

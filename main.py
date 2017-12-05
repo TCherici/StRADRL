@@ -217,60 +217,7 @@ class Application(object):
         
         self.sess.run(tf.global_variables_initializer())
         
-        # tensorboard summary for base 
-        self.score_input = tf.placeholder(tf.int32)
-        self.policy_loss = tf.placeholder(tf.float32)
-        self.value_loss = tf.placeholder(tf.float32)
-        self.base_entropy = tf.placeholder(tf.float32)
-        self.base_gradient = tf.placeholder(tf.float32)
-        self.laststate = tf.placeholder(tf.float32, [1, flags.vis_w, flags.vis_h, len(flags.vision)], name="laststate")
-        score = tf.summary.scalar("base/score", self.score_input)
-        policy_loss = tf.summary.scalar("base/policy_loss", self.policy_loss)
-        value_loss = tf.summary.scalar("base/value_loss", self.value_loss)
-        entropy = tf.summary.scalar("base/entropy", self.base_entropy)
-        gradient = tf.summary.scalar("base/gradient", self.base_gradient)
-        laststate = tf.summary.image("base/laststate", self.laststate)
-
-        self.summary_values = [self.score_input, self.policy_loss, self.value_loss, self.base_entropy, self.base_gradient, self.laststate]
-        #self.summary_op = tf.summary.merge([score,loss,entropy])
-        self.summary_op = tf.summary.merge_all()
-        
-        # tensorboard summary for aux
-        self.summary_aux = []
-        aux_losses = []
-        self.aux_basep_loss = tf.placeholder(tf.float32)
-        self.aux_basev_loss = tf.placeholder(tf.float32)
-        self.summary_aux.append(self.aux_basep_loss)
-        self.summary_aux.append(self.aux_basev_loss)
-        aux_losses.append(tf.summary.scalar("aux/basep_loss", self.aux_basep_loss))
-        aux_losses.append(tf.summary.scalar("aux/basev_loss", self.aux_basev_loss))
-        
-        if flags.use_pixel_change:
-            self.pc_loss = tf.placeholder(tf.float32)
-            self.summary_aux.append(self.pc_loss)
-            aux_losses.append(tf.summary.scalar("aux/pc_loss", self.pc_loss))
-        if flags.use_value_replay:
-            self.vr_loss = tf.placeholder(tf.float32)
-            self.summary_aux.append(self.vr_loss)
-            aux_losses.append(tf.summary.scalar("aux/vr_loss", self.vr_loss))
-        if flags.use_reward_prediction:
-            self.rp_loss = tf.placeholder(tf.float32)
-            self.summary_aux.append(self.rp_loss)
-            aux_losses.append(tf.summary.scalar("aux/rp_loss", self.rp_loss))
-        if flags.use_temporal_coherence:
-            self.tc_loss = tf.placeholder(tf.float32)
-            self.summary_aux.append(self.tc_loss)
-            aux_losses.append(tf.summary.scalar("aux/tc_loss", self.tc_loss))
-        
-        self.summary_op_aux = tf.summary.merge(aux_losses)
-        
-        #self.summary_op = tf.summary.merge_all()
-        tensorboard_path = flags.temp_dir+TRAINING_NAME+"/"
-        logger.info("tensorboard path:"+tensorboard_path)
-        if not os.path.exists(tensorboard_path):
-            os.makedirs(tensorboard_path)
-        self.summary_writer = tf.summary.FileWriter(tensorboard_path)
-        self.summary_writer.add_graph(self.sess.graph)
+        self.init_tensorboard()
 
         # init or load checkpoint with saver
         self.saver = tf.train.Saver(self.global_network.get_vars())
@@ -319,7 +266,64 @@ class Application(object):
 
         logger.info('Press Ctrl+C to stop')
         signal.pause()
+    
+    
+    def init_tensorboard(self):
+        # tensorboard summary for base 
+        self.score_input = tf.placeholder(tf.int32)
+        self.epl_input = tf.placeholder(tf.int32)
+        self.policy_loss = tf.placeholder(tf.float32)
+        self.value_loss = tf.placeholder(tf.float32)
+        self.base_entropy = tf.placeholder(tf.float32)
+        self.base_gradient = tf.placeholder(tf.float32)
+        self.laststate = tf.placeholder(tf.float32, [1, flags.vis_w, flags.vis_h, len(flags.vision)], name="laststate")
+        score = tf.summary.scalar("env/score", self.score_input)
+        epl = tf.summary.scalar("env/ep_length", self.epl_input)
+        policy_loss = tf.summary.scalar("base/policy_loss", self.policy_loss)
+        value_loss = tf.summary.scalar("base/value_loss", self.value_loss)
+        entropy = tf.summary.scalar("base/entropy", self.base_entropy)
+        gradient = tf.summary.scalar("base/gradient", self.base_gradient)
+        laststate = tf.summary.image("base/laststate", self.laststate)
 
+        self.summary_values = [self.score_input, self.epl_input, self.policy_loss, self.value_loss, self.base_entropy, self.base_gradient, self.laststate]
+        self.summary_op = tf.summary.merge_all() # we want to merge model histograms as well here
+        
+        # tensorboard summary for aux
+        self.summary_aux = []
+        aux_losses = []
+        self.aux_basep_loss = tf.placeholder(tf.float32)
+        self.aux_basev_loss = tf.placeholder(tf.float32)
+        self.summary_aux.append(self.aux_basep_loss)
+        self.summary_aux.append(self.aux_basev_loss)
+        aux_losses.append(tf.summary.scalar("aux/basep_loss", self.aux_basep_loss))
+        aux_losses.append(tf.summary.scalar("aux/basev_loss", self.aux_basev_loss))
+        
+        if flags.use_pixel_change:
+            self.pc_loss = tf.placeholder(tf.float32)
+            self.summary_aux.append(self.pc_loss)
+            aux_losses.append(tf.summary.scalar("aux/pc_loss", self.pc_loss))
+        if flags.use_value_replay:
+            self.vr_loss = tf.placeholder(tf.float32)
+            self.summary_aux.append(self.vr_loss)
+            aux_losses.append(tf.summary.scalar("aux/vr_loss", self.vr_loss))
+        if flags.use_reward_prediction:
+            self.rp_loss = tf.placeholder(tf.float32)
+            self.summary_aux.append(self.rp_loss)
+            aux_losses.append(tf.summary.scalar("aux/rp_loss", self.rp_loss))
+        if flags.use_temporal_coherence:
+            self.tc_loss = tf.placeholder(tf.float32)
+            self.summary_aux.append(self.tc_loss)
+            aux_losses.append(tf.summary.scalar("aux/tc_loss", self.tc_loss))
+        
+        self.summary_op_aux = tf.summary.merge(aux_losses)
+        
+        #self.summary_op = tf.summary.merge_all()
+        tensorboard_path = flags.temp_dir+TRAINING_NAME+"/"
+        logger.info("tensorboard path:"+tensorboard_path)
+        if not os.path.exists(tensorboard_path):
+            os.makedirs(tensorboard_path)
+        self.summary_writer = tf.summary.FileWriter(tensorboard_path)
+        self.summary_writer.add_graph(self.sess.graph)
 
     def save(self):
         """ Save checkpoint. 

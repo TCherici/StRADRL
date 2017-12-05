@@ -14,7 +14,7 @@ import six.moves.queue as queue
 from collections import namedtuple
 
 from environment.environment import Environment
-from model.base import BaseModel
+from model.model import UnrealModel
 from train.experience import Experience, ExperienceFrame
 
 logger = logging.getLogger("StRADRL.base_trainer")
@@ -23,7 +23,7 @@ SYNC_INTERVAL = 1000
 LOG_INTERVAL = 10000
 PERFORMANCE_LOG_INTERVAL = 10000
 
-Batch = namedtuple("Batch", ["si", "a", "adv", "r", "terminal", "pc"])
+Batch = namedtuple("Batch", ["si", "a", "a_r", "adv", "r", "terminal", "features", "pc"])
 
 def process_rollout(rollout, gamma, lambda_=1.0):
     """
@@ -32,6 +32,7 @@ def process_rollout(rollout, gamma, lambda_=1.0):
     batch_si = np.asarray(rollout.states)
     batch_a = np.asarray(rollout.actions)
     rewards = np.asarray(rollout.rewards)
+    action_reward = np.concatenate((batch_a,rewards[:,np.newaxis]), axis=1)
     vpred_t = np.asarray(rollout.values + [rollout.r])
 
     rewards_plus_v = np.asarray(rollout.rewards + [rollout.r])
@@ -43,7 +44,7 @@ def process_rollout(rollout, gamma, lambda_=1.0):
 
     features = rollout.features
     batch_pc = np.asarray(rollout.pixel_changes)
-    return Batch(batch_si, batch_a, batch_adv, batch_r, rollout.terminal, batch_pc)
+    return Batch(batch_si, batch_a, action_reward, batch_adv, batch_r, rollout.terminal, features, batch_pc)
 
 def discount(x, gamma):
     return scipy.signal.lfilter([1], [1, -gamma], x[::-1], axis=0)[::-1]
@@ -70,6 +71,7 @@ class BaseTrainer(object):
         self.gamma = gamma
         self.max_global_time_step = max_global_time_step
         self.action_size = Environment.get_action_size(env_type, env_name)
+        self.global_network = global_network
         self.local_network = UnrealModel(self.action_size,
                                          visinput,
                                          1,
@@ -176,14 +178,18 @@ class BaseTrainer(object):
             return None
             
     
-    def process(self, sess, global_t, global_network, summary_writer, summary_op, summary_values):
+    def process(self, sess, global_t, summary_writer, summary_op, summary_values):
         cur_learning_rate = self._anneal_learning_rate(global_t)
         # Copy weights from shared to local
         if self.local_t >= self.next_sync_t:
             #logger.debug("Syncing to global net -- current learning rate:{}".format(cur_learning_rate))
             #logger.debug("local_t:{} - global_t:{}".format(self.local_t,global_t))
-            sess.run( self.sync(global_network, name="trainerstuff"))
-            self.next_sync_t += SYNC_INTERVAL
+            try:
+                sess.run(self.sync(self.global_network, name="base_trainer"))
+                self.next_sync_t += SYNC_INTERVAL
+            except Exception:
+                logger.warn("--- !! parallel syncing !! ---")
+
         # get batch from process_rollout
         rollout = self.pull_batch_from_queue()
         batch = process_rollout(rollout, gamma=0.99, lambda_=1.0)
@@ -203,6 +209,7 @@ class BaseTrainer(object):
         #logger.debug("si:{}".format(batch.si.shape))
         feed_dict = {
             self.local_network.base_input: batch.si,
+            self.local_network.base_last_action_reward_input: batch.a_r,
             self.local_network.base_a: batch.a,
             self.local_network.base_adv: batch.adv,
             self.local_network.base_r: batch.r,
@@ -228,13 +235,13 @@ class BaseTrainer(object):
         total_ep_reward = self._add_batch_to_exp(batch)
         if total_ep_reward is not None:
             laststate = baseinput[np.newaxis,-1,...]
-            #logger.debug("mean base loss: {} - mean_entropy: {}".format(mean_loss,mean_entropy))
             summary_str = sess.run(summary_op, feed_dict={summary_values[0]: total_ep_reward,
-                                                          summary_values[1]: self.ep_ploss/self.ep_l,
-                                                          summary_values[2]: self.ep_vloss/self.ep_l,
-                                                          summary_values[3]: np.mean(self.ep_entr),
-                                                          summary_values[4]: np.mean(self.ep_grad),
-                                                          summary_values[5]: laststate})
+                                                          summary_values[1]: self.ep_l,
+                                                          summary_values[2]: self.ep_ploss/self.ep_l,
+                                                          summary_values[3]: self.ep_vloss/self.ep_l,
+                                                          summary_values[4]: np.mean(self.ep_entr),
+                                                          summary_values[5]: np.mean(self.ep_grad),
+                                                          summary_values[6]: laststate})
             summary_writer.add_summary(summary_str, global_t)
             summary_writer.flush()
             self.ep_l = 0

@@ -25,13 +25,13 @@ def get_options(option_type):
 
   # For training
   if option_type == 'training':
-    tf.app.flags.DEFINE_string("training_name","mazepro_noaux_1e-4","name of next training in log")
+    tf.app.flags.DEFINE_string("training_name","mazepro_noaux_1e-5_v2","name of next training in log")
     tf.app.flags.DEFINE_integer("parallel_size", 0, "parallel thread size")
     tf.app.flags.DEFINE_integer("local_t_max", 20, "repeat step size")
 
     tf.app.flags.DEFINE_string("temp_dir", "/tmp/StRADRL/tensorboard/", "base directory for tensorboard")
     tf.app.flags.DEFINE_string("log_dir", "/tmp/StRADRL/log/", "base directory for logs")
-    tf.app.flags.DEFINE_float("initial_learning_rate", 1e-4, "learning rate")
+    tf.app.flags.DEFINE_float("initial_learning_rate", 1e-5, "learning rate")
     tf.app.flags.DEFINE_float("gamma", 0.99, "discount factor for rewards")
     tf.app.flags.DEFINE_float("gamma_pc", 0.9, "discount factor for pixel control")
     tf.app.flags.DEFINE_float("entropy_beta", 0.01, "entropy regurarlization constant")
