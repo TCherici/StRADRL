@@ -82,6 +82,7 @@ class BaseTrainer(object):
         self.sync = self.local_network.sync_from(global_network)
         self.experience = experience
         self.local_t = 0
+        self.next_sync_t = 0
         self.initial_learning_rate = initial_learning_rate
         self.episode_reward = 0
         # trackers for the experience replay creation
@@ -161,13 +162,14 @@ class BaseTrainer(object):
             return None
             
     
-    def process(self, sess, global_t, summary_writer, summary_op, score_input):
+    def process(self, sess, global_t, summary_writer, summary_op, summary_values):
         cur_learning_rate = self._anneal_learning_rate(global_t)
         # Copy weights from shared to local
-        if self.local_t % SYNC_INTERVAL == 0:
+        if self.local_t >= self.next_sync_t:
             logger.debug("Syncing to global net -- current learning rate:{}".format(cur_learning_rate))
             logger.debug("local_t:{} - global_t:{}".format(self.local_t,global_t))
             sess.run( self.sync )
+            self.next_sync_t += SYNC_INTERVAL
         # get batch from process_rollout
         rollout = self.pull_batch_from_queue()
         batch = process_rollout(rollout, gamma=0.99, lambda_=1.0)
@@ -192,18 +194,25 @@ class BaseTrainer(object):
         }
         
         # Calculate gradients and copy them to global netowrk.
-        sess.run( self.apply_gradients, feed_dict=feed_dict )
+        _, loss, entropy = sess.run( [self.apply_gradients, self.local_network.total_loss, self.local_network.entropy],
+                                     feed_dict=feed_dict )
         
+
+
         # add batch to experience replay
         total_ep_reward = self._add_batch_to_exp(batch)
         if total_ep_reward is not None:
-            summary_str = sess.run(summary_op, feed_dict={score_input: total_ep_reward})
+            mean_entropy = np.mean(entropy)
+            logger.debug("base loss: {} - mean_entropy: {}".format(loss,mean_entropy))
+            summary_str = sess.run(summary_op, feed_dict={summary_values[0]: total_ep_reward,
+                                                            summary_values[1]: loss,
+                                                            summary_values[2]: mean_entropy})
             summary_writer.add_summary(summary_str, global_t)
             summary_writer.flush()
         
         # Return advanced local step size
         #@TODO check what we are doing with the timekeeping
-        diff_local_t = self.local_t - global_t
-        return diff_local_t
+        diff_global_t = self.local_t - global_t
+        return diff_global_t
         
 

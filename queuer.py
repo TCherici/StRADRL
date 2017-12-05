@@ -99,7 +99,7 @@ def env_runner(env, sess, policy, num_local_steps, syncfunc, summary_writer, ren
     the policy, and as long as the rollout exceeds a certain length, the thread
     runner appends the policy to the queue.
     """
-    logger.debug("resetting env in session {} and syncing to global".format(sess))
+    logger.debug("resetting env in session {}".format(sess))
     last_state, last_action_reward = env.reset()
     #logger.debug(last_action_reward.shape)
     length = 0
