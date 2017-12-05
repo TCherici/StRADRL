@@ -5,14 +5,16 @@ from __future__ import print_function
 
 import random
 import numpy as np
+import logging
 from collections import deque
 
+logger = logging.getLogger("StRADRL.experience")
 
 class ExperienceFrame(object):
   def __init__(self, state, reward, action, terminal, pixel_change, last_action, last_reward):
     self.state = state
     self.action = action # (Taken action with the 'state')
-    self.reward = np.clip(reward, -1, 1) # Reveived reward with the 'state'. (Clipped)
+    self.reward = np.clip(reward, -1, 1) # Received reward with the 'state'. (Clipped)
     self.terminal = terminal # (Whether terminated when 'state' was inputted)
     self.pixel_change = pixel_change
     self.last_action = last_action # (After this last action was taken, agent move to the 'state')
@@ -50,7 +52,7 @@ class Experience(object):
   def add_frame(self, frame):
     if frame.terminal and len(self._frames) > 0 and self._frames[-1].terminal:
       # Discard if terminal frame continues
-      print("Terminal frames continued.")
+      logger.info("Terminal frames continued.")
       return
 
     frame_index = self._top_frame_index + len(self._frames)
@@ -58,7 +60,7 @@ class Experience(object):
 
     # append frame
     self._frames.append(frame)
-
+    
     # append index
     if frame_index >= 3:
       if frame.reward == 0:
@@ -71,12 +73,10 @@ class Experience(object):
 
       cut_frame_index = self._top_frame_index + 3
       # Cut frame if its index is lower than cut_frame_index.
-      if len(self._zero_reward_indices) > 0 and \
-         self._zero_reward_indices[0] < cut_frame_index:
+      if len(self._zero_reward_indices) > 0 and self._zero_reward_indices[0] < cut_frame_index:
         self._zero_reward_indices.popleft()
         
-      if len(self._non_zero_reward_indices) > 0 and \
-         self._non_zero_reward_indices[0] < cut_frame_index:
+      if len(self._non_zero_reward_indices) > 0 and self._non_zero_reward_indices[0] < cut_frame_index:
         self._non_zero_reward_indices.popleft()
 
 
@@ -87,8 +87,8 @@ class Experience(object):
   def sample_sequence(self, sequence_size):
     # -1 for the case if start pos is the terminated frame.
     # (Then +1 not to start from terminated frame.)
-    start_pos = np.random.randint(0, self._history_size - sequence_size -1)
-
+    start_pos = np.random.randint(0, len(self._frames) - sequence_size -1)
+    #logger.debug("length frames:{}".format(len(self._frames)))
     if self._frames[start_pos].terminal:
       start_pos += 1
       # Assuming that there are no successive terminal frames.

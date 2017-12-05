@@ -3,9 +3,6 @@ package(default_visibility = ["//visibility:public"])
 env_args = [
   "--env_type lab",
   "--env_name nav_maze_static_01",
-  "--use_pixel_change True",
-  "--use_value_replay True",
-  "--use_reward_prediction True"
 ]
 
 py_binary(
@@ -37,4 +34,12 @@ py_test(
     srcs = ["test.py"],
     main = "test.py",
     deps = [":train"],
+)
+
+py_binary(
+    name = "newtrain",
+    srcs = ["newmain.py"],
+    args = env_args,
+    data = ["//:deepmind_lab.so"],
+    main = "newmain.py"
 )
