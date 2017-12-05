@@ -75,7 +75,7 @@ class Application(object):
         trainer = self.aux_trainers[aux_index]
         
         while True:
-            if self.global_t < 1000:
+            if self.global_t < 100:
                 continue
             if self.stop_requested:
                 break
