@@ -118,7 +118,7 @@ class MazeEnvironment(environment.Environment):
                 self.y == self._goal_pos[1])
 
     if terminal:
-      reward = 100
+      reward = 1
     elif hit:
       reward = -1
     else:

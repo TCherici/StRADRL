@@ -70,6 +70,7 @@ class Application(object):
             
             diff_global_t = trainer.process(self.sess,
                                           self.global_t,
+                                          self.global_network,
                                           self.summary_writer,
                                           self.summary_op,
                                           self.summary_values)
@@ -119,6 +120,7 @@ class Application(object):
                                                   flags.env_name)
         # Setup Global Network
         logger.debug("loading global model...")
+<<<<<<< HEAD:main.py~
         self.global_network = UnrealModel(action_size,
                                           visinput,
                                           -1,
@@ -130,6 +132,13 @@ class Application(object):
                                           flags.use_temporal_coherence,
                                           flags.pixel_change_lambda,
                                           flags.temporal_coherence_lambda)
+=======
+        self.global_network = BaseModel(3,
+                                        action_size,
+                                        -1,
+                                        flags.entropy_beta,
+                                        device)
+>>>>>>> master:newmain.py
         logger.debug("done loading global model")
         learning_rate_input = tf.placeholder("float")
         

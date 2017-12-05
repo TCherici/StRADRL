@@ -29,11 +29,12 @@ class BaseModel(object):
     Base A3C model (no RNN)
     """
     def __init__(self,
-                visinput,
-                action_size,
-                thread_index, 
-                entropy_beta,
-                device)
+                 visinput,
+                 action_size,
+                 thread_index, 
+                 entropy_beta,
+                 device)
+
         self._device = device
         self.ch_num = len(visinput[0]) # ch_num is 1 if D, 3 if RGB, 4 if RGBD
         self.vis_h = visinput[1]
@@ -61,7 +62,7 @@ class BaseModel(object):
             base_fc_output = self._base_fc_layer(base_conv_output)
             
             # Policy and Value layers
-            self.base_pi = self._base_policy_layer(base_fc_output) # policy output
+            self.base_pi, self.base_pi_log = self._base_policy_layer(base_fc_output) # policy output
             self.base_v  = self._base_value_layer(base_fc_output)  # value output
             
             self.reset_state()
@@ -110,12 +111,14 @@ class BaseModel(object):
             # Weight for policy output layer
             W_fc_p, b_fc_p = self._fc_variable([256, self._action_size], "base_fc_p")
             # Policy (output)
-            base_pi = tf.nn.softmax(tf.matmul(lstm_outputs, W_fc_p) + b_fc_p)
+            logits = tf.matmul(lstm_outputs, W_fc_p) + b_fc_p
+            base_pi = tf.nn.softmax(logits)
+            base_pi_log = tf.nn.log_softmax(logits)
             
             # set reuse to True to make aux tasks reuse the variables
             self.reuse_policy = True
             
-            return base_pi
+            return base_pi,base_pi_log
 
     def _base_value_layer(self, lstm_outputs):
         with tf.variable_scope("base_value", reuse=self.reuse_value) as scope:
@@ -135,29 +138,22 @@ class BaseModel(object):
         # [base A3C]
         # Taken action (input for policy)
         self.base_a = tf.placeholder("float", [None, self._action_size])
-        
         # Advantage (R-V) (input for policy)
-        self.base_adv = tf.placeholder("float", [None])
-        
-        # Avoid NaN with clipping when value in pi becomes zero
-        log_pi = tf.log(tf.clip_by_value(self.base_pi, 1e-20, 1.0))
-        
-        # Policy entropy
-        self.entropy = -tf.reduce_sum(self.base_pi * log_pi, reduction_indices=1)
-        
-        # Policy loss (output)
-        policy_loss = -tf.reduce_sum( tf.reduce_sum( tf.multiply( log_pi, self.base_a ),
-                                                     reduction_indices=1 ) *
-                                      self.base_adv + self.entropy * self._entropy_beta)
-        
+        self.base_adv = tf.placeholder("float", [None])    
         # R (input for value target)
         self.base_r = tf.placeholder("float", [None])
         
+        # Policy loss (output)
+        self.policy_loss = -tf.reduce_sum(tf.reduce_sum(self.base_pi_log * self.base_a, [1]) * self.base_adv)
+
         # Value loss (output)
         # (Learning rate for Critic is half of Actor's, so multiply by 0.5)
-        value_loss = 0.5 * tf.nn.l2_loss(self.base_r - self.base_v)
+        self.value_loss = 0.5 * tf.reduce_sum(tf.square(self.base_v - self.base_r))
         
-        base_loss = policy_loss + value_loss
+        # Policy entropy
+        self.entropy = -tf.reduce_sum(self.base_pi * self.base_pi_log)
+        
+        base_loss = self.policy_loss + 0.5 * self.value_loss - self.entropy * self._entropy_beta
         return base_loss
 
     def prepare_loss(self):
@@ -167,19 +163,21 @@ class BaseModel(object):
     def run_base_policy_and_value(self, sess, s_t):
         # This run_base_policy_and_value() is used when forward propagating.
         # so the step size is 1.
-        pi_out, v_out = sess.run( [self.base_pi, self.base_v, self.base_lstm_state],
+        pi_out, v_out = sess.run( [self.base_pi, self.base_v],
                                     feed_dict = {self.base_input : [s_t]} )
         # pi_out: (1,3), v_out: (1)
         return (pi_out[0], v_out[0])
         
-    def run_base_value(self, sess, s_t, last_action_reward):
-        v_out = sess.run([self.base_v], feed_dict = {self.base_input: [s_t]}
+    def run_base_value(self, sess, s_t):
+        v_out = sess.run([self.base_v], feed_dict = {self.base_input: [s_t]})
+        return v_out[0]
     
     def get_vars(self):
         return self.variables
         
-    def sync_from(self, src_netowrk, name=None):
-        src_vars = src_netowrk.get_vars()
+    def sync_from(self, src_network, name=None):
+        #logger.debug("sync {} from {}".format(name, src_network))
+        src_vars = src_network.get_vars()
         dst_vars = self.get_vars()
 
         sync_ops = []
@@ -228,4 +226,7 @@ class BaseModel(object):
   
     def _conv2d(self, x, W, stride):
         return tf.nn.conv2d(x, W, strides = [1, stride, stride, 1], padding = "VALID")
+        
+    def reset_state(self):
+        logger.debug("dummy function, resetting state")
         

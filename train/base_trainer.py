@@ -14,16 +14,16 @@ import six.moves.queue as queue
 from collections import namedtuple
 
 from environment.environment import Environment
-from model.model import UnrealModel
+from model.base import BaseModel
 from train.experience import Experience, ExperienceFrame
 
 logger = logging.getLogger("StRADRL.base_trainer")
 
-SYNC_INTERVAL = 10000
+SYNC_INTERVAL = 1000
 LOG_INTERVAL = 10000
 PERFORMANCE_LOG_INTERVAL = 10000
 
-Batch = namedtuple("Batch", ["si", "a", "a_r", "adv", "r", "terminal", "features", "pc"])
+Batch = namedtuple("Batch", ["si", "a", "adv", "r", "terminal", "pc"])
 
 def process_rollout(rollout, gamma, lambda_=1.0):
     """
@@ -32,7 +32,6 @@ def process_rollout(rollout, gamma, lambda_=1.0):
     batch_si = np.asarray(rollout.states)
     batch_a = np.asarray(rollout.actions)
     rewards = np.asarray(rollout.rewards)
-    action_reward = np.concatenate((batch_a,rewards[:,np.newaxis]), axis=1)
     vpred_t = np.asarray(rollout.values + [rollout.r])
 
     rewards_plus_v = np.asarray(rollout.rewards + [rollout.r])
@@ -44,7 +43,7 @@ def process_rollout(rollout, gamma, lambda_=1.0):
 
     features = rollout.features
     batch_pc = np.asarray(rollout.pixel_changes)
-    return Batch(batch_si, batch_a, action_reward, batch_adv, batch_r, rollout.terminal, features, batch_pc)
+    return Batch(batch_si, batch_a, batch_adv, batch_r, rollout.terminal, batch_pc)
 
 def discount(x, gamma):
     return scipy.signal.lfilter([1], [1, -gamma], x[::-1], axis=0)[::-1]
@@ -76,12 +75,13 @@ class BaseTrainer(object):
                                          1,
                                          entropy_beta,
                                          device)
+
         self.local_network.prepare_loss()
         
         self.apply_gradients = grad_applier.minimize_local(self.local_network.total_loss,
                                                            global_network.get_vars(),
                                                            self.local_network.get_vars())
-        self.sync = self.local_network.sync_from(global_network)
+        self.sync = self.local_network.sync_from
         self.experience = experience
         self.local_t = 0
         self.next_log_t = 0
@@ -151,6 +151,7 @@ class BaseTrainer(object):
             state = batch.si[k]
             action = np.argmax(batch.a[k])
             reward = batch.a_r[k][-1]
+
             self.episode_reward += reward
             features = batch.features[k]
             pixel_change = batch.pc[k]
@@ -160,6 +161,7 @@ class BaseTrainer(object):
             else:
                 terminal = False
             frame = ExperienceFrame(self.last_state, reward, action, terminal, features, pixel_change,
+
                             self.last_action, self.last_reward)
             self.experience.add_frame(frame)
             self.last_state = state
@@ -174,13 +176,13 @@ class BaseTrainer(object):
             return None
             
     
-    def process(self, sess, global_t, summary_writer, summary_op, summary_values):
+    def process(self, sess, global_t, global_network, summary_writer, summary_op, summary_values):
         cur_learning_rate = self._anneal_learning_rate(global_t)
         # Copy weights from shared to local
         if self.local_t >= self.next_sync_t:
-            logger.debug("Syncing to global net -- current learning rate:{}".format(cur_learning_rate))
-            logger.debug("local_t:{} - global_t:{}".format(self.local_t,global_t))
-            sess.run( self.sync )
+            #logger.debug("Syncing to global net -- current learning rate:{}".format(cur_learning_rate))
+            #logger.debug("local_t:{} - global_t:{}".format(self.local_t,global_t))
+            sess.run( self.sync(global_network, name="trainerstuff"))
             self.next_sync_t += SYNC_INTERVAL
         # get batch from process_rollout
         rollout = self.pull_batch_from_queue()
@@ -201,7 +203,6 @@ class BaseTrainer(object):
         #logger.debug("si:{}".format(batch.si.shape))
         feed_dict = {
             self.local_network.base_input: batch.si,
-            self.local_network.base_last_action_reward_input: batch.a_r,
             self.local_network.base_a: batch.a,
             self.local_network.base_adv: batch.adv,
             self.local_network.base_r: batch.r,
@@ -210,7 +211,7 @@ class BaseTrainer(object):
             self.learning_rate_input: cur_learning_rate
         }
         
-        # Calculate gradients and copy them to global netowrk.
+        # Calculate gradients and copy them to global network.
         [_, grad], policy_loss, value_loss, entropy, baseinput = sess.run( [self.apply_gradients,
                                               self.local_network.policy_loss,
                                               self.local_network.value_loss,

@@ -9,6 +9,7 @@ import logging
 
 from environment.environment import Environment
 from model.model import UnrealModel
+from model.base import BaseModel
 
 logger = logging.getLogger('StRADRL.queuer')
 
@@ -28,16 +29,14 @@ class PartialRollout(object):
         self.values = []
         self.r = 0.0
         self.terminal = False
-        self.features = []
         self.pixel_changes = []
 
-    def add(self, state, action, reward, value, terminal, features, pixel_change):
+    def add(self, state, action, reward, value, terminal, pixel_change):
         self.states += [state]
         self.actions += [action]
         self.rewards += [reward]
         self.values += [value]
         self.terminal = terminal
-        self.features += [features]
         self.pixel_changes += [pixel_change]
 
     def extend(self, other):
@@ -48,7 +47,6 @@ class PartialRollout(object):
         self.values.extend(other.values)
         self.r = other.r
         self.terminal = other.terminal
-        self.features.extend(other.features)
         self.pixel_changes.extend(other.pixel_changes)
 
 class RunnerThread(threading.Thread):
@@ -57,15 +55,19 @@ class RunnerThread(threading.Thread):
         self.queue = queue.Queue(QUEUE_LENGTH)        
         self.num_local_steps = num_local_steps
         self.env = env
+
         self.last_features = None
         self.policy = UnrealModel(action_size,
                                   visinput,
                                   0,
                                   entropy_beta,
                                   device)
+
+        self.global_net = global_net
+
         self.sess = None
         self.visualise = visualise
-        self.sync = self.policy.sync_from(global_net)
+        self.sync = self.policy.sync_from#(global_net, name="net_0")
     
     def start_runner(self, sess):
         logger.debug("starting runner")
@@ -78,7 +80,7 @@ class RunnerThread(threading.Thread):
     
     def _run(self):
         rollout_provider = env_runner(self.env, self.sess, self.policy, self.num_local_steps, \
-            self.sync, self.visualise)
+            self.sync, self.global_net, self.visualise)
         while True:
             self.queue.put(next(rollout_provider), timeout=600.0)
             #logger.debug("added rollout. Approx queue length:{}".format(self.queue.qsize()))
@@ -101,7 +103,7 @@ def onehot(action, action_size, dtype="float32"):
     return action_oh
     
         
-def env_runner(env, sess, policy, num_local_steps, syncfunc, render):
+def env_runner(env, sess, policy, num_local_steps, syncfunc, global_net, render):
     """
     The logic of the thread runner.  In brief, it constantly keeps on running
     the policy, and as long as the rollout exceeds a certain length, the thread
@@ -110,7 +112,6 @@ def env_runner(env, sess, policy, num_local_steps, syncfunc, render):
     logger.debug("resetting env in session {}".format(sess))
     last_state, last_action_reward = env.reset()
     #logger.debug(last_action_reward.shape)
-    last_features = policy.get_initial_features()
     length = 0
     rewards = 0
     
@@ -121,23 +122,22 @@ def env_runner(env, sess, policy, num_local_steps, syncfunc, render):
             fetched = policy.run_base_policy_and_value(sess, last_state, last_action_reward)
             pi, value_, features = fetched[0], fetched[1], fetched[2:]
             #@TODO decide if argmax or probability, if latter fix experience replay selection
-            chosenaction = boltzmann(pi)
-            #chosenaction = np.argmax(pi)
-            action = onehot(chosenaction, len(pi))
+            #chosenaction = boltzmann(pi)
+            chosenaction = np.argmax(pi)
+            action = pi
+            #action = onehot(chosenaction, len(pi))
             
             state, reward, terminal, pixel_change = env.process(chosenaction)
             if render:
                 env.render()
 
             # collect the experience
-            rollout.add(last_state, action, reward, value_, terminal, last_features, pixel_change)
+            rollout.add(last_state, action, reward, value_, terminal, pixel_change)
             length += 1
             rewards += reward
             
             
             last_state = state
-            last_features = features
-            last_action_reward = np.append(action,reward)
             
             #timestep_limit = env.spec.tags.get('wrapper_config.TimeLimit.max_episode_steps')
             if terminal or length >= TIMESTEP_LIMIT:
@@ -145,17 +145,19 @@ def env_runner(env, sess, policy, num_local_steps, syncfunc, render):
                 rollout.terminal = True
                 # the if condition below has been disabled because deepmind lab has no metadata
                 #if length >= timestep_limit or not env.metadata.get('semantics.autoreset'):
+
                 last_state, last_action_reward = env.reset()
                 policy.reset_state()
                 last_features = policy.get_initial_features()
-                logger.info("Ep. finish. Tot rewards: %d. Length: %d" % (rewards, length))
-                sess.run(syncfunc)
+                logger.info("Ep. finished. \nTot rewards: %d. Length: %d. Value: %f" % (rewards, length, value_))
+                sess.run(syncfunc(global_net, name="env_runner_net"))
+
                 length = 0
                 rewards = 0
                 break
                 
         if not terminal_end:
-            rollout.r = policy.run_base_value(sess, last_state, last_action_reward)
+            rollout.r = policy.run_base_value(sess, last_state)
         # once we have enough experience, yield it, and have the ThreadRunner place it on a queue
         yield rollout
        
