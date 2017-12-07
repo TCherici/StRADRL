@@ -43,6 +43,12 @@ USE_GPU = True
 visualise = False
 
 
+def printflags():
+    logger.info("------ flags: ------")
+    for name in flags.__dict__['__flags']:
+        logger.info("{}: {}".format(name,flags.__dict__['__flags'][name]))
+    logger.info("--------------------")
+
 class Application(object):
     def __init__(self):
         pass
@@ -362,6 +368,6 @@ def main(argv):
 
 if __name__ == '__main__':
     logger = logger_init(flags.log_dir+TRAINING_NAME+'/', TRAINING_NAME, loglevel=LOG_LEVEL)
-    
+    printflags()
     tf.app.run()
     

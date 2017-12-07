@@ -79,13 +79,14 @@ class AuxTrainer(object):
                                          temporal_coherence_lambda,
                                          use_base=True)
         self.local_network.prepare_loss()
+        self.global_network = global_network
         
         #logger.debug("ln.total_loss:{}".format(self.local_network.total_loss))
         
         self.apply_gradients = grad_applier.minimize_local(self.local_network.total_loss,
-                                                           global_network.get_vars(),
+                                                           self.global_network.get_vars(),
                                                            self.local_network.get_vars())
-        self.sync = self.local_network.sync_from(global_network)
+        self.sync = self.local_network.sync_from
         self.initial_learning_rate = initial_learning_rate
         self.episode_reward = 0
         # trackers for the experience replay creation
@@ -127,7 +128,6 @@ class AuxTrainer(object):
             action_reward.append(a_r)
             batch_a.append(a_r[:-1])
             rewards.append(reward)
-            #logger.debug("last_action_reward:{}".format(last_action_reward))
             _, value, features = policy.run_base_policy_and_value(sess, last_state, last_action_reward)
             batch_features.append(features)
             values.append(value)
@@ -169,7 +169,6 @@ class AuxTrainer(object):
             pc_R = self.local_network.run_pc_q_max(sess,
                                                  pc_experience_frames[0].state,
                                                  pc_experience_frames[0].get_last_action_reward(self.action_size))
-
 
         for frame in pc_experience_frames[1:]:
             pc_R = frame.pixel_change + self.gamma_pc * pc_R
@@ -259,10 +258,10 @@ class AuxTrainer(object):
         cur_learning_rate = self._anneal_learning_rate(global_t)
         if self.local_t >= self.next_sync_t:
             # Copy weights from shared to local
-            logger.debug("aux_t:{} -- local_t:{} -- syncing...".format(aux_t, self.local_t))
-            sess.run( self.sync )
+            #logger.debug("aux_t:{} -- local_t:{} -- syncing...".format(aux_t, self.local_t))
+            sess.run(self.sync(self.global_network, name="aux_trainer_{}".format(self.thread_index)))
             self.next_sync_t += SYNC_INTERVAL
-            logger.debug("next_sync:{}".format(self.next_sync_t))
+            #logger.debug("next_sync:{}".format(self.next_sync_t))
         
         aux_losses = []
         aux_losses.append(self.local_network.policy_loss)
@@ -347,5 +346,5 @@ class AuxTrainer(object):
             summary_writer.flush()
         
         self.local_t += len(batch.si)
-        return len(batch.r)
+        return len(batch.si)
 
