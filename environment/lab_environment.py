@@ -63,14 +63,14 @@ def _action(*entries):
 
 class LabEnvironment(environment.Environment):
   ACTION_LIST = [
-    _action(-20,   0,  0,  0, 0, 0, 0), # look_left
-    _action( 20,   0,  0,  0, 0, 0, 0), # look_right
+    _action(-30,   0,  0,  0, 0, 0, 0), # look_left
+    _action( 30,   0,  0,  0, 0, 0, 0), # look_right
     #_action(  0,  10,  0,  0, 0, 0, 0), # look_up
     #_action(  0, -10,  0,  0, 0, 0, 0), # look_down
-    _action(  0,   0, -1,  0, 0, 0, 0), # strafe_left
-    _action(  0,   0,  1,  0, 0, 0, 0), # strafe_right
+    #_action(  0,   0, -1,  0, 0, 0, 0), # strafe_left
+    #_action(  0,   0,  1,  0, 0, 0, 0), # strafe_right
     _action(  0,   0,  0,  1, 0, 0, 0), # forward
-    _action(  0,   0,  0, -1, 0, 0, 0), # backward
+    #_action(  0,   0,  0, -1, 0, 0, 0), # backward
     #_action(  0,   0,  0,  0, 1, 0, 0), # fire
     #_action(  0,   0,  0,  0, 0, 1, 0), # jump
     #_action(  0,   0,  0,  0, 0, 0, 1)  # crouch

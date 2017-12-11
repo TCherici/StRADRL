@@ -19,7 +19,7 @@ from train.experience import Experience, ExperienceFrame
 
 logger = logging.getLogger("StRADRL.aux_trainer")
 
-SYNC_INTERVAL = 10000
+SYNC_INTERVAL = 2000
 LOG_INTERVAL = 1000
 
 Batch = namedtuple("Batch", ["si", "a", "a_r", "adv", "r", "terminal", "features"])#, "pc"])
@@ -43,6 +43,7 @@ class AuxTrainer(object):
                 env_name,
                 local_t_max,
                 gamma,
+                aux_lambda,
                 gamma_pc,
                 experience,
                 max_global_time_step,
@@ -61,6 +62,7 @@ class AuxTrainer(object):
         self.next_log_t = 0
         self.local_t_max = local_t_max
         self.gamma = gamma
+        self.aux_lambda = aux_lambda
         self.gamma_pc = gamma_pc
         self.experience = experience
         self.max_global_time_step = max_global_time_step
@@ -259,14 +261,17 @@ class AuxTrainer(object):
         if self.local_t >= self.next_sync_t:
             # Copy weights from shared to local
             #logger.debug("aux_t:{} -- local_t:{} -- syncing...".format(aux_t, self.local_t))
-            sess.run(self.sync(self.global_network, name="aux_trainer_{}".format(self.thread_index)))
-            self.next_sync_t += SYNC_INTERVAL
+            try:
+                sess.run(self.sync(self.global_network, name="aux_trainer_{}".format(self.thread_index)))
+                self.next_sync_t += SYNC_INTERVAL
+            except Exception:
+                logger.warn("--- !! parallel syncing !! ---")
             #logger.debug("next_sync:{}".format(self.next_sync_t))
         
         aux_losses = []
         aux_losses.append(self.local_network.policy_loss)
         aux_losses.append(self.local_network.value_loss)
-        batch = self._process_base(sess, self.local_network, self.gamma)
+        batch = self._process_base(sess, self.local_network, self.gamma, self.aux_lambda)
         
         feed_dict = {
                 self.local_network.base_input: batch.si,

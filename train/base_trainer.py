@@ -19,7 +19,7 @@ from train.experience import Experience, ExperienceFrame
 
 logger = logging.getLogger("StRADRL.base_trainer")
 
-SYNC_INTERVAL = 1000
+SYNC_INTERVAL = 2000
 LOG_INTERVAL = 10000
 PERFORMANCE_LOG_INTERVAL = 10000
 
@@ -178,7 +178,7 @@ class BaseTrainer(object):
             return None
             
     
-    def process(self, sess, global_t, summary_writer, summary_op, summary_values):
+    def process(self, sess, global_t, summary_writer, summary_op, summary_values, base_lambda):
         cur_learning_rate = self._anneal_learning_rate(global_t)
         # Copy weights from shared to local
         if self.local_t >= self.next_sync_t:
@@ -192,7 +192,7 @@ class BaseTrainer(object):
 
         # get batch from process_rollout
         rollout = self.pull_batch_from_queue()
-        batch = process_rollout(rollout, gamma=0.99, lambda_=1.0)
+        batch = process_rollout(rollout, gamma=0.99, lambda_=base_lambda)
         self.local_t += len(batch.si)
 
         

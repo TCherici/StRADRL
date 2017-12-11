@@ -355,9 +355,9 @@ class UnrealModel(object):
         self.value_loss = 0.5 * tf.reduce_sum(tf.square(self.base_v - self.base_r))
         
         # Policy entropy
-        self.entropy = -tf.reduce_sum(self.base_pi * self.base_pi_log)
+        self.entropy = -tf.reduce_sum(self.base_pi * self.base_pi_log) * self._entropy_beta
         
-        base_loss = self.policy_loss + 0.5 * self.value_loss - self.entropy * self._entropy_beta
+        base_loss = self.policy_loss + 0.5 * self.value_loss - self.entropy
         return base_loss
 
   

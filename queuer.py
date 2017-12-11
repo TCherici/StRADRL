@@ -12,10 +12,6 @@ from model.model import UnrealModel
 
 logger = logging.getLogger('StRADRL.queuer')
 
-QUEUE_LENGTH = 5
-TIMESTEP_LIMIT = 150
-EP_NUM_FORSYNC = 10
-
 
 class PartialRollout(object):
     """
@@ -53,21 +49,24 @@ class PartialRollout(object):
         self.pixel_changes.extend(other.pixel_changes)
 
 class RunnerThread(threading.Thread):
-    def __init__(self, env, global_net, action_size, visinput, entropy_beta, device, num_local_steps, visualise):
+    def __init__(self, flags, env, global_net, action_size, visinput, device, visualise):
         threading.Thread.__init__(self)
-        self.queue = queue.Queue(QUEUE_LENGTH)        
-        self.num_local_steps = num_local_steps
+        self.queue = queue.Queue(flags.queue_length)        
+        self.num_local_steps = flags.local_t_max
         self.env = env
         self.last_features = None
         self.policy = UnrealModel(action_size,
                                   visinput,
                                   0,
-                                  entropy_beta,
+                                  flags.entropy_beta,
                                   device)
         self.sess = None
         self.visualise = visualise
         self.sync = self.policy.sync_from
         self.global_net = global_net
+        self.env_max_steps = flags.env_max_steps
+        self.action_freq = flags.action_freq
+        self.env_runner_sync = flags.env_runner_sync
     
     def start_runner(self, sess):
         logger.debug("starting runner")
@@ -79,8 +78,10 @@ class RunnerThread(threading.Thread):
             self._run()
     
     def _run(self):
-        rollout_provider = env_runner(self.env, self.sess, self.policy, self.num_local_steps, \
-            self.sync, self.global_net, self.visualise)
+        
+        rollout_provider = env_runner(self.env, self.sess, self.policy, self.num_local_steps, self.env_max_steps,\
+            self.action_freq, self.env_runner_sync, self.sync, self.global_net, self.visualise)
+            
         while True:
             self.queue.put(next(rollout_provider), timeout=600.0)
             #logger.debug("added rollout. Approx queue length:{}".format(self.queue.qsize()))
@@ -103,7 +104,7 @@ def onehot(action, action_size, dtype="float32"):
     return action_oh
     
         
-def env_runner(env, sess, policy, num_local_steps, syncfunc, global_net, render):
+def env_runner(env, sess, policy, num_local_steps, env_max_steps, action_freq, env_runner_sync, syncfunc, global_net, render):
     """
     The logic of the thread runner.  In brief, it constantly keeps on running
     the policy, and as long as the rollout exceeds a certain length, the thread
@@ -130,6 +131,8 @@ def env_runner(env, sess, policy, num_local_steps, syncfunc, global_net, render)
             action = onehot(chosenaction, len(pi))
             
             state, reward, terminal, pixel_change = env.process(chosenaction)
+            if action_freq > 0.:
+                time.sleep(1.0/action_freq)
             if render:
                 env.render()
 
@@ -144,7 +147,7 @@ def env_runner(env, sess, policy, num_local_steps, syncfunc, global_net, render)
             last_action_reward = np.append(action,reward)
             
             #timestep_limit = env.spec.tags.get('wrapper_config.TimeLimit.max_episode_steps')
-            if terminal or length >= TIMESTEP_LIMIT:
+            if terminal or length >= env_max_steps:
                 terminal_end = True
                 rollout.terminal = True
                 # the if condition below has been disabled because deepmind lab has no metadata
@@ -153,7 +156,7 @@ def env_runner(env, sess, policy, num_local_steps, syncfunc, global_net, render)
                 policy.reset_state()
                 last_features = policy.get_initial_features()
                 logger.info("Ep. finish. Tot rewards: %d. Length: %d" % (rewards, length))
-                if itercount % EP_NUM_FORSYNC == 0:
+                if itercount % env_runner_sync == 0:
                     try:
                         sess.run(syncfunc(global_net, name="env_runner"))
                     except Exception:
@@ -166,6 +169,7 @@ def env_runner(env, sess, policy, num_local_steps, syncfunc, global_net, render)
             rollout.r = policy.run_base_value(sess, last_state, last_action_reward)
         # once we have enough experience, yield it, and have the ThreadRunner place it on a queue
         yield rollout
+        
        
     
 

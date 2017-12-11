@@ -81,7 +81,8 @@ class Application(object):
                                           self.global_t,
                                           self.summary_writer,
                                           self.summary_op,
-                                          self.summary_values)
+                                          self.summary_values,
+                                          flags.base_lambda)
             self.global_t += diff_global_t
             
     def aux_train_function(self, aux_index):
@@ -161,13 +162,12 @@ class Application(object):
         logger.debug("done loading environment")
         
         # Setup runner
-        self.runner = RunnerThread(self.environment,
+        self.runner = RunnerThread(flags,
+                                   self.environment,
                                    self.global_network,
                                    action_size,
                                    visinput,
-                                   flags.entropy_beta,
                                    device,
-                                   flags.local_t_max, 
                                    visualise)
         logger.debug("done setting up RunnerTread")
         
@@ -201,7 +201,7 @@ class Application(object):
                                                 flags.use_temporal_coherence,
                                                 flags.pixel_change_lambda,
                                                 flags.temporal_coherence_lambda,
-                                                initial_learning_rate,
+                                                flags.aux_initial_learning_rate,
                                                 learning_rate_input,
                                                 grad_applier,
                                                 visinput,
@@ -210,6 +210,7 @@ class Application(object):
                                                 flags.env_name,
                                                 flags.local_t_max,
                                                 flags.gamma,
+                                                flags.aux_lambda,
                                                 flags.gamma_pc,
                                                 self.experience,
                                                 flags.max_time_step,
