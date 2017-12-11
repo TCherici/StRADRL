@@ -16,8 +16,8 @@ import logging
 
 from helper import logger_init, generate_id
 from environment.environment import Environment
-from model.model import UnrealModel
-#from model.base import BaseModel
+#from model.model import UnrealModel
+from model.base import BaseModel
 from train.experience import Experience
 from train.adam_applier import AdamApplier
 from train.base_trainer import BaseTrainer
@@ -129,17 +129,11 @@ class Application(object):
                                                   flags.env_name)
         # Setup Global Network
         logger.debug("loading global model...")
-        self.global_network = UnrealModel(action_size,
-                                          visinput,
-                                          -1,
-                                          flags.entropy_beta,
-                                          device,
-                                          flags.use_pixel_change,
-                                          flags.use_value_replay,
-                                          flags.use_reward_prediction,
-                                          flags.use_temporal_coherence,
-                                          flags.pixel_change_lambda,
-                                          flags.temporal_coherence_lambda)
+        self.global_network = BaseModel(visinput,
+                                        action_size,
+                                        -1,
+                                        flags.entropy_beta,
+                                        device)
         logger.debug("done loading global model")
         learning_rate_input = tf.placeholder("float")
         
@@ -186,6 +180,7 @@ class Application(object):
                                         flags.env_name,
                                         flags.entropy_beta,
                                         flags.gamma,
+                                        flags.queue_length,
                                         self.experience,
                                         flags.max_time_step,
                                         device)

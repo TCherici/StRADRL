@@ -14,16 +14,17 @@ import six.moves.queue as queue
 from collections import namedtuple
 
 from environment.environment import Environment
-from model.model import UnrealModel
+#from model.model import UnrealModel
+from model.base import BaseModel
 from train.experience import Experience, ExperienceFrame
 
 logger = logging.getLogger("StRADRL.base_trainer")
 
-SYNC_INTERVAL = 2000
+SYNC_INTERVAL = 1000
 LOG_INTERVAL = 10000
 PERFORMANCE_LOG_INTERVAL = 10000
 
-Batch = namedtuple("Batch", ["si", "a", "a_r", "adv", "r", "terminal", "features", "pc"])
+Batch = namedtuple("Batch", ["si", "a", "a_r", "adv", "r", "terminal", "pc"])
 
 def process_rollout(rollout, gamma, lambda_=1.0):
     """
@@ -42,9 +43,8 @@ def process_rollout(rollout, gamma, lambda_=1.0):
     # https://arxiv.org/abs/1506.02438
     batch_adv = discount(delta_t, gamma * lambda_)
 
-    features = rollout.features
     batch_pc = np.asarray(rollout.pixel_changes)
-    return Batch(batch_si, batch_a, action_reward, batch_adv, batch_r, rollout.terminal, features, batch_pc)
+    return Batch(batch_si, batch_a, action_reward, batch_adv, batch_r, rollout.terminal, batch_pc)
 
 def discount(x, gamma):
     return scipy.signal.lfilter([1], [1, -gamma], x[::-1], axis=0)[::-1]
@@ -61,6 +61,7 @@ class BaseTrainer(object):
                env_name,
                entropy_beta,
                gamma,
+               queue_l,
                experience,
                max_global_time_step,
                device):
@@ -69,14 +70,15 @@ class BaseTrainer(object):
         self.env_type = env_type
         self.env_name = env_name
         self.gamma = gamma
+        self.queue_l = queue_l
         self.max_global_time_step = max_global_time_step
         self.action_size = Environment.get_action_size(env_type, env_name)
         self.global_network = global_network
-        self.local_network = UnrealModel(self.action_size,
-                                         visinput,
-                                         1,
-                                         entropy_beta,
-                                         device)
+        self.local_network = BaseModel(visinput,
+                                       self.action_size,
+                                       1,
+                                       entropy_beta,
+                                       device)
 
         self.local_network.prepare_loss()
         
@@ -107,10 +109,7 @@ class BaseTrainer(object):
         if learning_rate < 0.0:
             learning_rate = 0.0
         return learning_rate
-        
-    def choose_action(self, pi_values):
-        return np.random.choice(range(len(pi_values)), p=pi_values)
-    
+
     def set_start_time(self, start_time, global_t):
         self.start_time = start_time
         self.local_t = global_t
@@ -133,7 +132,8 @@ class BaseTrainer(object):
                 except queue.Empty:
                     #logger.warn("!!! queue was empty !!!")
                     continue
-            if count == 5 or rollout.terminal:
+            if count == self.queue_l or rollout.terminal:
+                #logger.debug(len(rollout.states))
                 rollout_full = True
         #logger.debug("pulled batch from rollout, length:{}".format(len(rollout.rewards)))
         return rollout
@@ -155,15 +155,13 @@ class BaseTrainer(object):
             reward = batch.a_r[k][-1]
 
             self.episode_reward += reward
-            features = batch.features[k]
             pixel_change = batch.pc[k]
             #logger.debug("k = {} of {} -- terminal = {}".format(k,len(batch.si), batch.terminal))
             if k == len(batch.si)-1 and batch.terminal:
                 terminal = True
             else:
                 terminal = False
-            frame = ExperienceFrame(self.last_state, reward, action, terminal, features, pixel_change,
-
+            frame = ExperienceFrame(self.last_state, reward, action, terminal, None, pixel_change,
                             self.last_action, self.last_reward)
             self.experience.add_frame(frame)
             self.last_state = state
@@ -181,14 +179,10 @@ class BaseTrainer(object):
     def process(self, sess, global_t, summary_writer, summary_op, summary_values, base_lambda):
         cur_learning_rate = self._anneal_learning_rate(global_t)
         # Copy weights from shared to local
-        if self.local_t >= self.next_sync_t:
+        #if self.local_t >= self.next_sync_t:
             #logger.debug("Syncing to global net -- current learning rate:{}".format(cur_learning_rate))
             #logger.debug("local_t:{} - global_t:{}".format(self.local_t,global_t))
-            try:
-                sess.run(self.sync(self.global_network, name="base_trainer"))
-                self.next_sync_t += SYNC_INTERVAL
-            except Exception:
-                logger.warn("--- !! parallel syncing !! ---")
+
 
         # get batch from process_rollout
         rollout = self.pull_batch_from_queue()
@@ -213,7 +207,6 @@ class BaseTrainer(object):
             self.local_network.base_a: batch.a,
             self.local_network.base_adv: batch.adv,
             self.local_network.base_r: batch.r,
-            self.local_network.base_initial_lstm_state: batch.features[0],
             # [common]
             self.learning_rate_input: cur_learning_rate
         }
@@ -244,6 +237,13 @@ class BaseTrainer(object):
                                                           summary_values[6]: laststate})
             summary_writer.add_summary(summary_str, global_t)
             summary_writer.flush()
+            
+            try:
+                sess.run(self.sync(self.global_network, name="base_trainer"))
+                self.next_sync_t += SYNC_INTERVAL
+            except Exception:
+                logger.warn("--- !! parallel syncing !! ---")
+            
             self.ep_l = 0
             self.ep_ploss = 0.
             self.ep_vloss = 0.

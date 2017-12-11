@@ -63,5 +63,5 @@ class Environment(object):
     d = np.absolute(state[2:-2,2:-2,:] - last_state[2:-2,2:-2,:])
     # (80,80,3)
     m = np.mean(d, 2)
-    c = self._subsample(m, 4)
+    c = None #self._subsample(m, 2)
     return c

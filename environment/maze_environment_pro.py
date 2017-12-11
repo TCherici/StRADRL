@@ -36,7 +36,7 @@ class MazeEnvironment(environment.Environment):
         return goal_pos
 
     def _setup(self):
-        image = np.zeros( (84, 84, 3), dtype=float )
+        image = np.zeros( (21, 21, 3), dtype=float )
       
         for y in range(7):
             for x in range(7):
@@ -55,13 +55,14 @@ class MazeEnvironment(environment.Environment):
         self.last_action = 0
         self.last_reward = 0
         last_action_reward = np.zeros([self.action_size+1])
+        last_action_reward[0] = 1
         
         return self.last_state, last_action_reward
         
     def _put_pixel(self, img, x, y, channel):
-        for i in range(12):
-            for j in range(12):
-                img[12*y + j, 12*x + i, channel] = 1.0
+        for i in range(3):
+            for j in range(3):
+                img[3*y + j, 3*x + i, channel] = 1.0
         return img
             
     def _get_pixel(self, x, y):

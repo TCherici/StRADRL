@@ -55,11 +55,15 @@ class BaseModel(object):
         with tf.device(self._device), tf.variable_scope(scope_name) as scope:
             # State (Base image input)
             self.base_input = tf.placeholder("float", [None, self.vis_w, self.vis_h, self.ch_num], name="base_input")
+            
             # Conv layers
             base_conv_output = self._base_conv_layers(self.base_input)
             
+            # Last action and reward
+            self.base_last_action_reward_input = tf.placeholder("float", [None, self._action_size+1])
+            
             # FC layer
-            base_fc_output = self._base_fc_layer(base_conv_output)
+            base_fc_output = self._base_fc_layer(base_conv_output, self.base_last_action_reward_input)
             
             # Policy and Value layers
             self.base_pi, self.base_pi_log = self._base_policy_layer(base_fc_output) # policy output
@@ -72,39 +76,45 @@ class BaseModel(object):
     def _base_conv_layers(self, state_input):
         with tf.variable_scope("base_conv", reuse=self.reuse_conv) as scope:
             # Weights
-            W_conv1, b_conv1 = self._conv_variable([8, 8, self.ch_num, 16],  "base_conv1")
-            W_conv2, b_conv2 = self._conv_variable([4, 4, 16, 32], "base_conv2")
+            W_conv1, b_conv1 = self._conv_variable([3, 3, self.ch_num, 16],  "base_conv1")
+            W_conv2, b_conv2 = self._conv_variable([3, 3, 16, 32], "base_conv2")
             
             # Nodes
-            h_conv1 = tf.nn.elu(self._conv2d(state_input, W_conv1, 4) + b_conv1) # stride=4
-            h_conv2 = tf.nn.elu(self._conv2d(h_conv1,     W_conv2, 2) + b_conv2) # stride=2
-            
+            h_conv1 = tf.nn.relu(self._conv2d(state_input, W_conv1, 2) + b_conv1) # stride=2
+            logger.debug(h_conv1.shape)
+            h_conv2 = tf.nn.relu(self._conv2d(h_conv1,     W_conv2, 2) + b_conv2) # stride=2
+            logger.debug(h_conv2.shape)
             # tensorboard summaries
-            tf.summary.histogram("weights1", W_conv1)
-            tf.summary.histogram("weights2", W_conv2)
-            tf.summary.histogram("biases1", b_conv1)
-            tf.summary.histogram("biases2", b_conv2)
+            #tf.summary.histogram("weights1", W_conv1)
+            #tf.summary.histogram("weights2", W_conv2)
+            #tf.summary.histogram("biases1", b_conv1)
+            #tf.summary.histogram("biases2", b_conv2)
             
             # set reuse to True to make other functions reuse the variables
             self.reuse_conv = True
             
             return h_conv2
 
-    def _base_fc_layer(self, conv_output):
+    def _base_fc_layer(self, conv_output, last_action_reward_input):
         with tf.variable_scope("base_fc", reuse=self.reuse_fc) as scope:
             # Weights and biases for fc layer
-            W_fc1, b_fc1 = self._fc_variable([2592, 256], "base_fc1")
+            W_fc1, b_fc1 = self._fc_variable([512+self._action_size+1, 256], "base_fc1")
             
-            # Flatten (bs*9*9*32 = bs*2592)
-            conv_output_flat = tf.reshape(conv_output, [-1, 2592])
+            # Flatten (bs*4*4*32 = bs*512)
+            conv_output_flat = tf.reshape(conv_output, [-1, 512])
+            
+            fc_input = tf.concat([conv_output_flat, last_action_reward_input], 1)
             
             # Make fc layer
-            fc_output = tf.nn.elu(tf.matmul(conv_output_flat, W_fc1) + b_fc1)
+            fc_output = tf.nn.relu(tf.matmul(fc_input, W_fc1) + b_fc1)
+            
+            # tensorboard
+            #tf.summary.histogram("fc_W1", W_fc1)
             
             # set reuse to True to make aux tasks reuse the variables
             self.reuse_fc = False
             
-            return fc_output            
+            return fc_output
             
     def _base_policy_layer(self, lstm_outputs):
         with tf.variable_scope("base_policy", reuse=self.reuse_policy) as scope:
@@ -160,23 +170,25 @@ class BaseModel(object):
         with tf.device(self._device):
             self.total_loss = self._base_loss()
             
-    def run_base_policy_and_value(self, sess, s_t):
+    def run_base_policy_and_value(self, sess, s_t, a_r):
         # This run_base_policy_and_value() is used when forward propagating.
         # so the step size is 1.
         pi_out, v_out = sess.run( [self.base_pi, self.base_v],
-                                    feed_dict = {self.base_input : [s_t]} )
+                                    feed_dict = {self.base_input : [s_t],
+                                                 self.base_last_action_reward_input : [a_r]} )
         # pi_out: (1,3), v_out: (1)
         return (pi_out[0], v_out[0])
         
-    def run_base_value(self, sess, s_t):
-        v_out = sess.run([self.base_v], feed_dict = {self.base_input: [s_t]})
+    def run_base_value(self, sess, s_t, a_r):
+        v_out = sess.run([self.base_v], feed_dict = {self.base_input: [s_t],
+                                                     self.base_last_action_reward_input : [a_r]})
         return v_out[0]
     
     def get_vars(self):
         return self.variables
         
     def sync_from(self, src_network, name=None):
-        #logger.debug("sync {} from {}".format(name, src_network))
+        #logger.debug("sync:{}".format(name))
         src_vars = src_network.get_vars()
         dst_vars = self.get_vars()
 
