@@ -39,7 +39,7 @@ else:
 LOG_LEVEL = 'debug'
 CONTINUE_TRAINING = False
 
-USE_GPU = True
+USE_GPU = False
 visualise = False
 
 

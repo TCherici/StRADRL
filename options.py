@@ -12,8 +12,9 @@ def get_options(option_type):
     'training' or 'diplay' or 'visualize'
   """
   # Common
-  tf.app.flags.DEFINE_string("env_type", "maze", "environment type (lab or gym or maze)")
-  tf.app.flags.DEFINE_string("env_name", "seekavoid_arena_01",  "environment name")
+  tf.app.flags.DEFINE_string("env_type", "lab", "environment type (lab or gym or maze)")
+  #tf.app.flags.DEFINE_string("env_name", "seekavoid_arena_01",  "environment name")
+  tf.app.flags.DEFINE_string("env_name", "nav_maze_static_01",  "environment name")
   tf.app.flags.DEFINE_boolean("use_pixel_change", False, "whether to use pixel change")
   tf.app.flags.DEFINE_boolean("use_value_replay", False, "whether to use value function replay")
   tf.app.flags.DEFINE_boolean("use_reward_prediction", False, "whether to use reward prediction")

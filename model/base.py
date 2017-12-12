@@ -80,9 +80,9 @@ class BaseModel(object):
             W_conv2, b_conv2 = self._conv_variable([3, 3, 16, 32], "base_conv2")
             
             # Nodes
-            h_conv1 = tf.nn.relu(self._conv2d(state_input, W_conv1, 2) + b_conv1) # stride=2
+            h_conv1 = tf.nn.elu(self._conv2d(state_input, W_conv1, 2) + b_conv1) # stride=2
             logger.debug(h_conv1.shape)
-            h_conv2 = tf.nn.relu(self._conv2d(h_conv1,     W_conv2, 2) + b_conv2) # stride=2
+            h_conv2 = tf.nn.elu(self._conv2d(h_conv1,     W_conv2, 2) + b_conv2) # stride=2
             logger.debug(h_conv2.shape)
             # tensorboard summaries
             #tf.summary.histogram("weights1", W_conv1)
@@ -106,7 +106,7 @@ class BaseModel(object):
             fc_input = tf.concat([conv_output_flat, last_action_reward_input], 1)
             
             # Make fc layer
-            fc_output = tf.nn.relu(tf.matmul(fc_input, W_fc1) + b_fc1)
+            fc_output = tf.nn.elu(tf.matmul(fc_input, W_fc1) + b_fc1)
             
             # tensorboard
             #tf.summary.histogram("fc_W1", W_fc1)
@@ -227,7 +227,7 @@ class BaseModel(object):
         else:
             input_channels  = weight_shape[2]
             output_channels = weight_shape[3]
-        bias_shape = [output_channels]
+        bias_shape = [1,1,1,output_channels]
 
         weight = tf.get_variable(name_w, weight_shape,
                                  initializer=conv_initializer(w, h, input_channels))
