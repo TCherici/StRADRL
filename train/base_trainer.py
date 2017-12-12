@@ -74,8 +74,8 @@ class BaseTrainer(object):
         self.max_global_time_step = max_global_time_step
         self.action_size = Environment.get_action_size(env_type, env_name)
         self.global_network = global_network
-        self.local_network = BaseModel(visinput,
-                                       self.action_size,
+        self.local_network = BaseModel(self.action_size,
+                                       visinput,
                                        1,
                                        entropy_beta,
                                        device)

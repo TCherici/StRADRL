@@ -29,8 +29,8 @@ class BaseModel(object):
     Base A3C model (no RNN)
     """
     def __init__(self,
-                 visinput,
                  action_size,
+                 visinput,
                  thread_index, 
                  entropy_beta,
                  device):
@@ -49,7 +49,7 @@ class BaseModel(object):
         self._create_network()
         
     def _create_network(self):
-        scope_name = "net_base_{}".format(self._thread_index)
+        scope_name = "net_{}".format(self._thread_index)
         logger.debug("creating base network -- device:{}".format(self._device))
         
         with tf.device(self._device), tf.variable_scope(scope_name) as scope:
@@ -98,12 +98,14 @@ class BaseModel(object):
     def _base_fc_layer(self, conv_output, last_action_reward_input):
         with tf.variable_scope("base_fc", reuse=self.reuse_fc) as scope:
             # Weights and biases for fc layer
-            W_fc1, b_fc1 = self._fc_variable([512+self._action_size+1, 256], "base_fc1")
+            #W_fc1, b_fc1 = self._fc_variable([512+self._action_size+1, 256], "base_fc1")
+            W_fc1, b_fc1 = self._fc_variable([512, 256], "base_fc1")
             
             # Flatten (bs*4*4*32 = bs*512)
             conv_output_flat = tf.reshape(conv_output, [-1, 512])
             
-            fc_input = tf.concat([conv_output_flat, last_action_reward_input], 1)
+            #fc_input = tf.concat([conv_output_flat, last_action_reward_input], 1)
+            fc_input = conv_output_flat
             
             # Make fc layer
             fc_output = tf.nn.elu(tf.matmul(fc_input, W_fc1) + b_fc1)
@@ -112,7 +114,7 @@ class BaseModel(object):
             #tf.summary.histogram("fc_W1", W_fc1)
             
             # set reuse to True to make aux tasks reuse the variables
-            self.reuse_fc = False
+            self.reuse_fc = True
             
             return fc_output
             
@@ -161,9 +163,9 @@ class BaseModel(object):
         self.value_loss = 0.5 * tf.reduce_sum(tf.square(self.base_v - self.base_r))
         
         # Policy entropy
-        self.entropy = -tf.reduce_sum(self.base_pi * self.base_pi_log)
+        self.entropy = -tf.reduce_sum(self.base_pi * self.base_pi_log) * self._entropy_beta
         
-        base_loss = self.policy_loss + 0.5 * self.value_loss - self.entropy * self._entropy_beta
+        base_loss = self.policy_loss + 0.5 * self.value_loss - self.entropy
         return base_loss
 
     def prepare_loss(self):

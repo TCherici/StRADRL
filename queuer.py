@@ -52,8 +52,8 @@ class RunnerThread(threading.Thread):
         self.queue = queue.Queue(flags.queue_length)        
         self.num_local_steps = flags.local_t_max
         self.env = env
-        self.policy = BaseModel(visinput,
-                                action_size,
+        self.policy = BaseModel(action_size,
+                                visinput,
                                 0,
                                 flags.entropy_beta,
                                 device)

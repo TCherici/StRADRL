@@ -39,7 +39,7 @@ else:
 LOG_LEVEL = 'debug'
 CONTINUE_TRAINING = False
 
-USE_GPU = False
+USE_GPU = True
 visualise = False
 
 
@@ -123,14 +123,15 @@ class Application(object):
         self.aux_t = 0
         self.stop_requested = False
         self.terminate_requested = False
-        logger.debug("getting action size...")
         visinput = [flags.vision, flags.vis_h, flags.vis_w]
         action_size = Environment.get_action_size(flags.env_type,
                                                   flags.env_name)
+                                                  
+        logger.debug("action size: {}".format(action_size))
         # Setup Global Network
         logger.debug("loading global model...")
-        self.global_network = BaseModel(visinput,
-                                        action_size,
+        self.global_network = BaseModel(action_size,
+                                        visinput,
                                         -1,
                                         flags.entropy_beta,
                                         device)

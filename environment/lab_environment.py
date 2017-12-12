@@ -7,6 +7,7 @@ from multiprocessing import Process, Pipe
 import numpy as np
 import deepmind_lab
 import logging
+from cv2 import resize
 
 from environment import environment
 
@@ -25,8 +26,8 @@ def worker(conn, env_name, visinput):
     ['RGBD_INTERLACED'],
     config={
       'fps': str(60),
-      'width': str(w),
-      'height': str(h)
+      'width': str(4*w),
+      'height': str(4*h)
     })
   conn.send(COMMAND_RESET)
   
@@ -63,8 +64,8 @@ def _action(*entries):
 
 class LabEnvironment(environment.Environment):
   ACTION_LIST = [
-    _action(-30,   0,  0,  0, 0, 0, 0), # look_left
-    _action( 30,   0,  0,  0, 0, 0, 0), # look_right
+    _action(-20,   0,  0,  0, 0, 0, 0), # look_left
+    _action( 20,   0,  0,  0, 0, 0, 0), # look_right
     #_action(  0,  10,  0,  0, 0, 0, 0), # look_up
     #_action(  0, -10,  0,  0, 0, 0, 0), # look_down
     #_action(  0,   0, -1,  0, 0, 0, 0), # strafe_left
@@ -84,6 +85,8 @@ class LabEnvironment(environment.Environment):
     environment.Environment.__init__(self)
     
     self.num_ch = len(visinput[0])
+    self.h = visinput[1]
+    self.w = visinput[2]
     self.conn, child_conn = Pipe()
     self.proc = Process(target=worker, args=(child_conn, env_name, visinput))
     self.proc.start()
@@ -101,6 +104,7 @@ class LabEnvironment(environment.Environment):
     self.last_action = 0
     self.last_reward = 0
     last_action_reward = np.zeros([self.action_size+1])
+    last_action_reward[1] = 1
     
     return self.last_state, last_action_reward
 
@@ -133,5 +137,6 @@ class LabEnvironment(environment.Environment):
         image = image[...,:3]
     image = image.astype(np.float32)
     image = image / 255.0
+    image = resize(image, (self.w,self.h))
     return image
 
