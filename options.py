@@ -26,7 +26,7 @@ def get_options(option_type):
 
   # For training
   if option_type == 'training':
-    tf.app.flags.DEFINE_string("training_name","promaze_noaux_2e5_lambda09","name of next training in log")
+    tf.app.flags.DEFINE_string("training_name","promaze_noaux_5e5_allrelu_vallossred","name of next training in log")
     tf.app.flags.DEFINE_integer("parallel_size", 0, "parallel thread size")
     tf.app.flags.DEFINE_integer("local_t_max", 20, "repeat step size")
 
@@ -38,7 +38,7 @@ def get_options(option_type):
     tf.app.flags.DEFINE_float("gamma_pc", 0.9, "discount factor for pixel control")
     tf.app.flags.DEFINE_float("entropy_beta", 0.001, "entropy regurarlization constant")
     tf.app.flags.DEFINE_float("base_lambda", 0.9, "generalized adv. est. lamba for short-long sight")
-    tf.app.flags.DEFINE_float("aux_lambda", 0.9, "generalized adv. est. lamba for short-long sight (aux)")
+    tf.app.flags.DEFINE_float("aux_lambda", 0.0, "generalized adv. est. lamba for short-long sight (aux)")
     tf.app.flags.DEFINE_float("pixel_change_lambda", 0.0001, "pixel change lambda") # 0.05, 0.01 ~ 0.1 for lab, 0.0001 ~ 0.01 for gym
     tf.app.flags.DEFINE_float("temporal_coherence_lambda", 10., "temporal coherence lambda") #@TODO check values
     tf.app.flags.DEFINE_integer("experience_history_size", 300, "experience replay buffer size")
@@ -48,7 +48,7 @@ def get_options(option_type):
     
     # queuer
     tf.app.flags.DEFINE_integer("queue_length", 5, "max number of batches (of length local_t_max) in queue")
-    tf.app.flags.DEFINE_integer("env_max_steps", 300, "max number of steps in environment")
+    tf.app.flags.DEFINE_integer("env_max_steps", 150, "max number of steps in environment")
     tf.app.flags.DEFINE_integer("env_runner_sync", 10, "number of env episodes before sync to global")
     tf.app.flags.DEFINE_float("action_freq", 0.,  "number of actions per second in env")
     
