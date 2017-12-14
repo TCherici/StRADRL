@@ -19,7 +19,6 @@ from train.experience import Experience, ExperienceFrame
 
 logger = logging.getLogger("StRADRL.base_trainer")
 
-SYNC_INTERVAL = 2000
 LOG_INTERVAL = 10000
 PERFORMANCE_LOG_INTERVAL = 10000
 
@@ -88,7 +87,6 @@ class BaseTrainer(object):
         self.local_t = 0
         self.next_log_t = 0
         self.next_performance_t = PERFORMANCE_LOG_INTERVAL
-        self.next_sync_t = SYNC_INTERVAL
         self.initial_learning_rate = initial_learning_rate
         self.episode_reward = 0
         # trackers for the experience replay creation
@@ -181,14 +179,9 @@ class BaseTrainer(object):
     def process(self, sess, global_t, summary_writer, summary_op, summary_values, base_lambda):
         cur_learning_rate = self._anneal_learning_rate(global_t)
         # Copy weights from shared to local
-        if self.local_t >= self.next_sync_t:
-            #logger.debug("Syncing to global net -- current learning rate:{}".format(cur_learning_rate))
-            #logger.debug("local_t:{} - global_t:{}".format(self.local_t,global_t))
-            try:
-                sess.run(self.sync(self.global_network, name="base_trainer"))
-                self.next_sync_t += SYNC_INTERVAL
-            except Exception:
-                logger.warn("--- !! parallel syncing !! ---")
+        #logger.debug("Syncing to global net -- current learning rate:{}".format(cur_learning_rate))
+        #logger.debug("local_t:{} - global_t:{}".format(self.local_t,global_t))
+
 
         # get batch from process_rollout
         rollout = self.pull_batch_from_queue()
@@ -244,6 +237,11 @@ class BaseTrainer(object):
                                                           summary_values[6]: laststate})
             summary_writer.add_summary(summary_str, global_t)
             summary_writer.flush()
+            try:
+                sess.run(self.sync(self.global_network, name="base_trainer"))
+                self.next_sync_t += SYNC_INTERVAL
+            except Exception:
+                logger.warn("--- !! parallel syncing !! ---")
             self.ep_l = 0
             self.ep_ploss = 0.
             self.ep_vloss = 0.

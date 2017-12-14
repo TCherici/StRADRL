@@ -19,7 +19,7 @@ from train.experience import Experience, ExperienceFrame
 
 logger = logging.getLogger("StRADRL.aux_trainer")
 
-SYNC_INTERVAL = 2000
+SYNC_INTERVAL = 150
 LOG_INTERVAL = 1000
 
 Batch = namedtuple("Batch", ["si", "a", "a_r", "adv", "r", "terminal", "features"])#, "pc"])
@@ -94,6 +94,18 @@ class AuxTrainer(object):
         # trackers for the experience replay creation
         self.last_action = np.zeros(self.action_size)
         self.last_reward = 0
+        
+        self.aux_losses = []
+        self.aux_losses.append(self.local_network.policy_loss)
+        self.aux_losses.append(self.local_network.value_loss)
+        if self.use_pixel_change:
+            self.aux_losses.append(self.local_network.pc_loss)
+        if self.use_value_replay:
+            self.aux_losses.append(self.local_network.vr_loss)
+        if self.use_reward_prediction:
+            self.aux_losses.append(self.local_network.rp_loss)
+        if self.use_temporal_coherence:
+            self.aux_losses.append(self.local_network.tc_loss)
         
     def _anneal_learning_rate(self, global_time_step):
         learning_rate = self.initial_learning_rate * (self.max_global_time_step - global_time_step) / self.max_global_time_step
@@ -268,9 +280,7 @@ class AuxTrainer(object):
                 logger.warn("--- !! parallel syncing !! ---")
             #logger.debug("next_sync:{}".format(self.next_sync_t))
         
-        aux_losses = []
-        aux_losses.append(self.local_network.policy_loss)
-        aux_losses.append(self.local_network.value_loss)
+
         batch = self._process_base(sess, self.local_network, self.gamma, self.aux_lambda)
         
         feed_dict = {
@@ -287,8 +297,7 @@ class AuxTrainer(object):
         # [Pixel change]
         if self.use_pixel_change:
             batch_pc_si, batch_pc_last_action_reward, batch_pc_a, batch_pc_R = self._process_pc(sess)
-            aux_losses.append(self.local_network.pc_loss)
-            
+
             pc_feed_dict = {
                 self.local_network.pc_input: batch_pc_si,
                 self.local_network.pc_last_action_reward_input: batch_pc_last_action_reward,
@@ -302,7 +311,6 @@ class AuxTrainer(object):
         # [Value replay]
         if self.use_value_replay:
             batch_vr_si, batch_vr_last_action_reward, batch_vr_R = self._process_vr(sess)
-            aux_losses.append(self.local_network.vr_loss)
             
             vr_feed_dict = {
                 self.local_network.vr_input: batch_vr_si,
@@ -316,7 +324,6 @@ class AuxTrainer(object):
         # [Reward prediction]
         if self.use_reward_prediction:
             batch_rp_si, batch_rp_c = self._process_rp()
-            aux_losses.append(self.local_network.rp_loss)
             rp_feed_dict = {
                 self.local_network.rp_input: batch_rp_si,
                 self.local_network.rp_c_target: batch_rp_c,
@@ -328,7 +335,6 @@ class AuxTrainer(object):
         # [Temporal coherence]
         if self.use_temporal_coherence:
             batch_tc_input1, batch_tc_input2 = self._process_tc()
-            aux_losses.append(self.local_network.tc_loss)
             tc_feed_dict = {
                 self.local_network.tc_input1: np.asarray(batch_tc_input1),
                 self.local_network.tc_input2: np.asarray(batch_tc_input2)
@@ -338,7 +344,7 @@ class AuxTrainer(object):
         
         
         # Calculate gradients and copy them to global netowrk.
-        _, losses = sess.run([self.apply_gradients, aux_losses], feed_dict=feed_dict )
+        _, losses = sess.run([self.apply_gradients, self.aux_losses], feed_dict=feed_dict )
         
         if self.thread_index==2 and aux_t >= self.next_log_t:
             logger.debug("losses:{}".format(losses))

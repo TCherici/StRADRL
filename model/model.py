@@ -357,7 +357,7 @@ class UnrealModel(object):
         # Policy entropy
         self.entropy = -tf.reduce_sum(self.base_pi * self.base_pi_log) * self._entropy_beta
         
-        base_loss = self.policy_loss + 0.5 * self.value_loss - self.entropy
+        base_loss = self.policy_loss + self.value_loss - self.entropy
         return base_loss
 
   
@@ -436,13 +436,18 @@ class UnrealModel(object):
     def run_base_policy_and_value(self, sess, s_t, last_action_reward):
         # This run_base_policy_and_value() is used when forward propagating.
         # so the step size is 1.
-        pi_out, v_out, self.base_lstm_state_out = sess.run( [self.base_pi, self.base_v, self.base_lstm_state],
-                                                            feed_dict = {self.base_input : [s_t],
+        try:
+            pi_out, v_out, self.base_lstm_state_out = sess.run( [self.base_pi, self.base_v, self.base_lstm_state],
+                                                                feed_dict = {self.base_input : [s_t],
                                                                          self.base_last_action_reward_input : [last_action_reward],
                                                                          self.base_initial_lstm_state0 : self.base_lstm_state_out[0],
                                                                          self.base_initial_lstm_state1 : self.base_lstm_state_out[1]} )
+            (pi, v, lstmstate) = (pi_out[0], v_out[0], self.base_lstm_state_out)
+        except Exception:
+            logger.warn(" XXXXXXXXXXX model run error, going recursive! XXXXXXXXXXX ")
+            (pi, v, lstmstate) = self.run_base_policy_and_value(sess, s_t, last_action_reward)
         # pi_out: (1,3), v_out: (1)
-        return (pi_out[0], v_out[0], self.base_lstm_state_out)
+        return (pi, v, lstmstate)
 
   
     def run_base_policy_value_pc_q(self, sess, s_t, last_action_reward):
@@ -502,14 +507,16 @@ class UnrealModel(object):
 
         sync_ops = []
         logger.debug("sync:{}".format(name))
+        return tf.group(*[v1.assign(v2) for v1, v2 in zip(src_vars, dst_vars)])
+        """
         with tf.device(self._device):
-            with tf.name_scope(name, "UnrealModel",[]) as name:
+            with tf.name_scope(None, "UnrealModel", []) as scopename:
                 for(src_var, dst_var) in zip(src_vars, dst_vars):
                     sync_op = tf.assign(dst_var, src_var)
                     sync_ops.append(sync_op)
 
         return tf.group(*sync_ops, name=name)
-      
+        """
 
     def _fc_variable(self, weight_shape, name):
         name_w = "W_{0}".format(name)
