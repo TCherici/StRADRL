@@ -155,6 +155,7 @@ class Application(object):
         grad_applier = AdamApplier(learning_rate = learning_rate_input,
                                    clip_norm=flags.grad_norm_clip,
                                    device=device)
+                                   
         # Start environment
         self.environment = Environment.create_environment(flags.env_type,
                                                       flags.env_name,
@@ -300,8 +301,11 @@ class Application(object):
         aux_losses = []
         self.aux_basep_loss = tf.placeholder(tf.float32)
         self.aux_basev_loss = tf.placeholder(tf.float32)
+        self.aux_entropy = tf.placeholder(tf.float32)
+        self.aux_gradient = tf.placeholder(tf.float32)
         self.summary_aux.append(self.aux_basep_loss)
         self.summary_aux.append(self.aux_basev_loss)
+
         aux_losses.append(tf.summary.scalar("aux/basep_loss", self.aux_basep_loss))
         aux_losses.append(tf.summary.scalar("aux/basev_loss", self.aux_basev_loss))
         
@@ -322,6 +326,12 @@ class Application(object):
             self.summary_aux.append(self.tc_loss)
             aux_losses.append(tf.summary.scalar("aux/tc_loss", self.tc_loss))
         
+        # append entropy and gradient last
+        self.summary_aux.append(self.aux_entropy)
+        self.summary_aux.append(self.aux_gradient)
+        aux_losses.append(tf.summary.scalar("aux/entropy", self.aux_entropy))
+        aux_losses.append(tf.summary.scalar("aux/gradient", self.aux_gradient))        
+                
         self.summary_op_aux = tf.summary.merge(aux_losses)
         
         #self.summary_op = tf.summary.merge_all()

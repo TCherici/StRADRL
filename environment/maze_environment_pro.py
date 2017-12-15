@@ -29,7 +29,7 @@ class MazeEnvironment(environment.Environment):
 
     def _set_goal(self):
         goal_pos = self._agent_pos
-        while np.linalg.norm(np.array(goal_pos) - np.array(self._agent_pos)) < 3:
+        while np.linalg.norm(np.array(goal_pos) - np.array(self._agent_pos)) < 2:
             gx = int(7*np.random.random())
             gy = int(7*np.random.random())
             goal_pos = (gx,gy)

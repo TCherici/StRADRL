@@ -344,7 +344,7 @@ class AuxTrainer(object):
         
         
         # Calculate gradients and copy them to global netowrk.
-        _, losses = sess.run([self.apply_gradients, self.aux_losses], feed_dict=feed_dict )
+        [_, grad], losses, entropy = sess.run([self.apply_gradients, self.aux_losses, self.local_network.entropy], feed_dict=feed_dict )
         
         if self.thread_index==2 and aux_t >= self.next_log_t:
             logger.debug("losses:{}".format(losses))
@@ -352,6 +352,8 @@ class AuxTrainer(object):
             feed_dict_aux = {}
             for k in range(len(losses)):
                 feed_dict_aux.update({summary_aux[k]:losses[k]})
+            feed_dict_aux.update({summary_aux[-2]:np.mean(entropy),
+                                  summary_aux[-1]:np.mean(grad)})
             summary_str = sess.run(summary_op_aux, feed_dict=feed_dict_aux)
             summary_writer.add_summary(summary_str, aux_t)
             summary_writer.flush()

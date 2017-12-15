@@ -31,18 +31,19 @@ class AdamApplier(object):
         minimize loss and apply gradients to global vars.
         """
         with tf.device(self._device):
+            logger.debug("appling grads")
             var_refs = [v._ref() for v in local_var_list]
-            local_gradients = tf.gradients(loss, var_refs)
+            local_gradients = tf.gradients(loss, var_refs,
+                                gate_gradients=False,
+                                aggregation_method=None,
+                                colocate_gradients_with_ops=False)
             
             local_gradients, _ = tf.clip_by_global_norm(local_gradients, self._clip_norm)
             
             
             norms = tf.global_norm(local_gradients)
             
-            #logger.debug(local_gradients)
-            #grad_mean = np.mean(local_gradients.flatten())
-            
-            self.sync = tf.group(*[v1.assign(v2) for v1, v2 in zip(local_var_list, global_var_list)])
+            #self.sync = tf.group(*[v1.assign(v2) for v1, v2 in zip(local_var_list, global_var_list)])
             
             grads_and_vars = list(zip(local_gradients, global_var_list))
 

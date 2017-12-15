@@ -144,10 +144,10 @@ class UnrealModel(object):
             h_conv2 = tf.nn.relu(self._conv2d(h_conv1,     W_conv2, 2) + b_conv2) # stride=2
             
             # tensorboard summaries
-            tf.summary.histogram("weights1", W_conv1)
-            tf.summary.histogram("weights2", W_conv2)
-            tf.summary.histogram("biases1", b_conv1)
-            tf.summary.histogram("biases2", b_conv2)
+            #tf.summary.histogram("weights1", W_conv1)
+            #tf.summary.histogram("weights2", W_conv2)
+            #tf.summary.histogram("biases1", b_conv1)
+            #tf.summary.histogram("biases2", b_conv2)
             
             # set reuse to True to make other functions reuse the variables
             self.reuse_conv = True
@@ -198,6 +198,10 @@ class UnrealModel(object):
         with tf.variable_scope("base_policy", reuse=reuse) as scope:
             # Weight for policy output layer
             W_fc_p, b_fc_p = self._fc_variable([256, self._action_size], "base_fc_p")
+            
+            tf.summary.histogram("policyW", W_fc_p)
+            tf.summary.histogram("policyb", b_fc_p)
+            
             # Policy (output)
             base_pi_linear = tf.matmul(lstm_outputs, W_fc_p) + b_fc_p
             base_pi = tf.nn.softmax(base_pi_linear)
@@ -213,6 +217,9 @@ class UnrealModel(object):
         with tf.variable_scope("base_value", reuse=reuse) as scope:
             # Weight for value output layer
             W_fc_v, b_fc_v = self._fc_variable([256, 1], "base_fc_v")
+            
+            tf.summary.histogram("valueW", W_fc_v)
+            tf.summary.histogram("valueb", b_fc_v)
             
             # Value (output)
             v_ = tf.matmul(lstm_outputs, W_fc_v) + b_fc_v

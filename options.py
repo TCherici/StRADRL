@@ -12,7 +12,7 @@ def get_options(option_type):
     'training' or 'diplay' or 'visualize'
   """
   # Common
-  tf.app.flags.DEFINE_string("env_type", "maze", "environment type (lab or gym or maze)")
+  tf.app.flags.DEFINE_string("env_type", "lab", "environment type (lab or gym or maze)")
   tf.app.flags.DEFINE_string("env_name", "seekavoid_arena_01",  "environment name")
   tf.app.flags.DEFINE_boolean("use_pixel_change", False, "whether to use pixel change")
   tf.app.flags.DEFINE_boolean("use_value_replay", False, "whether to use value function replay")
@@ -25,14 +25,16 @@ def get_options(option_type):
 
   # For training
   if option_type == 'training':
-    tf.app.flags.DEFINE_string("training_name","pro_1aux_1e-4_lamb09","name of next training in log")
-    tf.app.flags.DEFINE_integer("parallel_size", 1, "parallel thread size")
+    tf.app.flags.DEFINE_string("training_name","lab_1aux_7e-4_lamb09","name of next training in log")
+    tf.app.flags.DEFINE_integer("parallel_size", 0, "parallel thread size")
     tf.app.flags.DEFINE_integer("local_t_max", 20, "repeat step size")
+    tf.app.flags.DEFINE_float("rmsp_alpha", 0.99, "decay parameter for rmsprop")
+    tf.app.flags.DEFINE_float("rmsp_epsilon", 0.1, "epsilon parameter for rmsprop")
 
     tf.app.flags.DEFINE_string("temp_dir", "/tmp/StRADRL/tensorboard/", "base directory for tensorboard")
     tf.app.flags.DEFINE_string("log_dir", "/tmp/StRADRL/log/", "base directory for logs")
-    tf.app.flags.DEFINE_float("initial_learning_rate", 1e-4, "learning rate")
-    tf.app.flags.DEFINE_float("aux_initial_learning_rate", 1e-4, "learning rate")
+    tf.app.flags.DEFINE_float("initial_learning_rate", 7e-4, "learning rate")
+    tf.app.flags.DEFINE_float("aux_initial_learning_rate", 7e-4, "learning rate")
     tf.app.flags.DEFINE_float("gamma", 0.9, "discount factor for rewards")
     tf.app.flags.DEFINE_float("gamma_pc", 0.9, "discount factor for pixel control")
     tf.app.flags.DEFINE_float("entropy_beta", 0.0001, "entropy regurarlization constant")
@@ -47,9 +49,9 @@ def get_options(option_type):
     
     # queuer
     tf.app.flags.DEFINE_integer("queue_length", 5, "max number of batches (of length local_t_max) in queue")
-    tf.app.flags.DEFINE_integer("env_max_steps", 150, "max number of steps in environment")
+    tf.app.flags.DEFINE_integer("env_max_steps", 300, "max number of steps in environment")
     tf.app.flags.DEFINE_integer("env_runner_sync", 1, "number of env episodes before sync to global")
-    tf.app.flags.DEFINE_float("action_freq", 0.,  "number of actions per second in env")
+    tf.app.flags.DEFINE_float("action_freq", 10,  "number of actions per second in env")
     
     #
 

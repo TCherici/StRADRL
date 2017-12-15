@@ -80,8 +80,8 @@ class BaseTrainer(object):
         self.local_network.prepare_loss()
         
         self.apply_gradients = grad_applier.minimize_local(self.local_network.total_loss,
-                                                           global_network.get_vars(),
-                                                           self.local_network.get_vars())
+                                                                    self.global_network.get_vars(),
+                                                                     self.local_network.get_vars())
         self.sync = self.local_network.sync_from
         self.experience = experience
         self.local_t = 0
@@ -117,7 +117,6 @@ class BaseTrainer(object):
         """
         take a rollout from the queue of the thread runner.
         """
-        #@TODO change 5 to a possible variable
         rollout_full = False
         count = 0
         while not rollout_full:
@@ -212,7 +211,8 @@ class BaseTrainer(object):
         }
         
         # Calculate gradients and copy them to global network.
-        [_, grad], policy_loss, value_loss, entropy, baseinput = sess.run( [self.apply_gradients,
+        [_, grad], policy_loss, value_loss, entropy, baseinput = sess.run(
+                                              [self.apply_gradients,
                                               self.local_network.policy_loss,
                                               self.local_network.value_loss,
                                               self.local_network.entropy, 
