@@ -16,7 +16,7 @@ class RMSPropApplier(object):
                learning_rate,
                decay=0.9,
                momentum=0.0,
-               epsilon=1e-10,
+               epsilon=1e-7,
                clip_norm=40.0,
                device="/cpu:0",
                name="RMSPropApplier"):
@@ -123,10 +123,12 @@ class RMSPropApplier(object):
 
     # global gradient norm clipping
     local_grad_list, _ =  tf.clip_by_global_norm(local_grad_list, self._clip_norm)
+    
+    norms = tf.global_norm(local_grad_list)
 
     with tf.name_scope(name, self._name,[]) as name:
       self._prepare()
       for var, grad in zip(global_var_list, local_grad_list):
         with tf.name_scope("update_" + var.op.name), tf.device(var.device):
           update_ops.append(self._apply_dense(grad, var))
-      return tf.group(*update_ops, name=name)
+      return [tf.group(*update_ops, name=name), norms]

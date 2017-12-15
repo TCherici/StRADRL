@@ -20,6 +20,7 @@ from model.model import UnrealModel
 #from model.base import BaseModel
 from train.experience import Experience
 from train.adam_applier import AdamApplier
+from train.rmsprop_applier import RMSPropApplier
 from train.base_trainer import BaseTrainer
 from train.aux_trainer import AuxTrainer
 from queuer import RunnerThread
@@ -144,18 +145,18 @@ class Application(object):
         learning_rate_input = tf.placeholder("float")
         
         # Setup gradient calculator
-        """
+        #"""
         grad_applier = RMSPropApplier(learning_rate = learning_rate_input,
-                                  decay = flags.rmsp_alpha,
+                                  #decay = flags.rmsp_alpha,
                                   momentum = 0.0,
-                                  epsilon = flags.rmsp_epsilon,
+                                  #epsilon = flags.rmsp_epsilon,
                                   clip_norm = flags.grad_norm_clip,
                                   device = device)
         """
         grad_applier = AdamApplier(learning_rate = learning_rate_input,
                                    clip_norm=flags.grad_norm_clip,
                                    device=device)
-                                   
+        """                    
         # Start environment
         self.environment = Environment.create_environment(flags.env_type,
                                                       flags.env_name,

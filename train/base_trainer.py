@@ -82,7 +82,7 @@ class BaseTrainer(object):
         self.apply_gradients = grad_applier.minimize_local(self.local_network.total_loss,
                                                                     self.global_network.get_vars(),
                                                                      self.local_network.get_vars())
-        self.sync = self.local_network.sync_from
+        self.sync = self.local_network.sync_from(self.global_network, name="base_trainer")
         self.experience = experience
         self.local_t = 0
         self.next_log_t = 0
@@ -176,6 +176,7 @@ class BaseTrainer(object):
             
     
     def process(self, sess, global_t, summary_writer, summary_op, summary_values, base_lambda):
+        sess.run(self.sync)
         cur_learning_rate = self._anneal_learning_rate(global_t)
         # Copy weights from shared to local
         #logger.debug("Syncing to global net -- current learning rate:{}".format(cur_learning_rate))
@@ -210,6 +211,7 @@ class BaseTrainer(object):
             self.learning_rate_input: cur_learning_rate
         }
         
+        
         # Calculate gradients and copy them to global network.
         [_, grad], policy_loss, value_loss, entropy, baseinput = sess.run(
                                               [self.apply_gradients,
@@ -237,11 +239,10 @@ class BaseTrainer(object):
                                                           summary_values[6]: laststate})
             summary_writer.add_summary(summary_str, global_t)
             summary_writer.flush()
-            try:
-                sess.run(self.sync(self.global_network, name="base_trainer"))
-                self.next_sync_t += SYNC_INTERVAL
-            except Exception:
-                logger.warn("--- !! parallel syncing !! ---")
+            #try:
+            #sess.run(self.sync)
+            #except Exception:
+            #    logger.warn("--- !! parallel syncing !! ---")
             self.ep_l = 0
             self.ep_ploss = 0.
             self.ep_vloss = 0.

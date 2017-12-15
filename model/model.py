@@ -514,6 +514,8 @@ class UnrealModel(object):
 
         sync_ops = []
         logger.debug("sync:{}".format(name))
+        """
+        # DOESNT WORK!!!
         return tf.group(*[v1.assign(v2) for v1, v2 in zip(src_vars, dst_vars)])
         """
         with tf.device(self._device):
@@ -523,7 +525,7 @@ class UnrealModel(object):
                     sync_ops.append(sync_op)
 
         return tf.group(*sync_ops, name=name)
-        """
+        #"""
 
     def _fc_variable(self, weight_shape, name):
         name_w = "W_{0}".format(name)

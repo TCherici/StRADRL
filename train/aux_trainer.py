@@ -88,7 +88,7 @@ class AuxTrainer(object):
         self.apply_gradients = grad_applier.minimize_local(self.local_network.total_loss,
                                                            self.global_network.get_vars(),
                                                            self.local_network.get_vars())
-        self.sync = self.local_network.sync_from
+        self.sync = self.local_network.sync_from(self.global_network, name="aux_trainer_{}".format(self.thread_index))
         self.initial_learning_rate = initial_learning_rate
         self.episode_reward = 0
         # trackers for the experience replay creation
@@ -106,6 +106,7 @@ class AuxTrainer(object):
             self.aux_losses.append(self.local_network.rp_loss)
         if self.use_temporal_coherence:
             self.aux_losses.append(self.local_network.tc_loss)
+       
         
     def _anneal_learning_rate(self, global_time_step):
         learning_rate = self.initial_learning_rate * (self.max_global_time_step - global_time_step) / self.max_global_time_step
@@ -268,18 +269,19 @@ class AuxTrainer(object):
         return batch_tc_input1, batch_tc_input2
 
     def process(self, sess, global_t, aux_t, summary_writer, summary_op_aux, summary_aux):
-
+        sess.run(self.sync)
         cur_learning_rate = self._anneal_learning_rate(global_t)
+        """
         if self.local_t >= self.next_sync_t:
             # Copy weights from shared to local
             #logger.debug("aux_t:{} -- local_t:{} -- syncing...".format(aux_t, self.local_t))
             try:
-                sess.run(self.sync(self.global_network, name="aux_trainer_{}".format(self.thread_index)))
+                sess.run(self.sync)
                 self.next_sync_t += SYNC_INTERVAL
             except Exception:
                 logger.warn("--- !! parallel syncing !! ---")
             #logger.debug("next_sync:{}".format(self.next_sync_t))
-        
+        """
 
         batch = self._process_base(sess, self.local_network, self.gamma, self.aux_lambda)
         
@@ -342,12 +344,14 @@ class AuxTrainer(object):
             
             feed_dict.update(tc_feed_dict)
         
+        #logger.debug(len(batch.si))
         
         # Calculate gradients and copy them to global netowrk.
         [_, grad], losses, entropy = sess.run([self.apply_gradients, self.aux_losses, self.local_network.entropy], feed_dict=feed_dict )
         
         if self.thread_index==2 and aux_t >= self.next_log_t:
-            logger.debug("losses:{}".format(losses))
+            #logger.debug("losses:{}".format(losses))
+            
             self.next_log_t += LOG_INTERVAL
             feed_dict_aux = {}
             for k in range(len(losses)):

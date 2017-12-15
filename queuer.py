@@ -62,7 +62,7 @@ class RunnerThread(threading.Thread):
                                   device)
         self.sess = None
         self.visualise = visualise
-        self.sync = self.policy.sync_from
+        self.sync = self.policy.sync_from(global_net, name="env_runner")
         self.global_net = global_net
         self.env_max_steps = flags.env_max_steps
         self.action_freq = flags.action_freq
@@ -112,7 +112,7 @@ def env_runner(env, sess, policy, num_local_steps, env_max_steps, action_freq, e
     """
     logger.debug("resetting env in session {}".format(sess))
     last_state, last_action_reward = env.reset()
-    sess.run(syncfunc(global_net, name="env_runner_start"))
+    sess.run(syncfunc)
     last_features = policy.get_initial_features()
     length = 0
     rewards = 0
@@ -157,10 +157,7 @@ def env_runner(env, sess, policy, num_local_steps, env_max_steps, action_freq, e
                 last_features = policy.get_initial_features()
                 logger.info("Ep. finish. Tot rewards: %d. Length: %d" % (rewards, length))
                 if itercount % env_runner_sync == 0:
-                    try:
-                        sess.run(syncfunc(global_net, name="env_runner"))
-                    except Exception:
-                        logger.warn("--- !! parallel syncing !! ---")
+                    sess.run(syncfunc)
                 length = 0
                 rewards = 0
                 break
