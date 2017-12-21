@@ -19,7 +19,8 @@ from train.experience import Experience, ExperienceFrame
 
 logger = logging.getLogger("StRADRL.aux_trainer")
 
-SYNC_INTERVAL = 150
+# syncing at start of batch
+#SYNC_INTERVAL = 150
 LOG_INTERVAL = 1000
 
 Batch = namedtuple("Batch", ["si", "a", "a_r", "adv", "r", "terminal", "features"])#, "pc"])
@@ -41,6 +42,7 @@ class AuxTrainer(object):
                 aux_t,
                 env_type,
                 env_name,
+                entropy_beta,
                 local_t_max,
                 gamma,
                 aux_lambda,
@@ -57,6 +59,7 @@ class AuxTrainer(object):
         self.learning_rate_input = learning_rate_input
         self.env_type = env_type
         self.env_name = env_name
+        self.entropy_beta = entropy_beta
         self.local_t = 0
         self.next_sync_t = 0
         self.next_log_t = 0
@@ -71,7 +74,7 @@ class AuxTrainer(object):
         self.local_network = UnrealModel(self.action_size,
                                          visinput,
                                          self.thread_index,
-                                         0.,
+                                         self.entropy_beta,
                                          device,
                                          use_pixel_change,
                                          use_value_replay,

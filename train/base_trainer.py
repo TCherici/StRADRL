@@ -19,7 +19,7 @@ from train.experience import Experience, ExperienceFrame
 
 logger = logging.getLogger("StRADRL.base_trainer")
 
-LOG_INTERVAL = 10000
+LOG_INTERVAL = 1000
 PERFORMANCE_LOG_INTERVAL = 10000
 
 Batch = namedtuple("Batch", ["si", "a", "a_r", "adv", "r", "terminal", "features", "pc"])
@@ -236,7 +236,8 @@ class BaseTrainer(object):
                                                           summary_values[3]: self.ep_vloss/self.ep_l,
                                                           summary_values[4]: np.mean(self.ep_entr),
                                                           summary_values[5]: np.mean(self.ep_grad),
-                                                          summary_values[6]: laststate})
+                                                          summary_values[6]: cur_learning_rate,
+                                                          summary_values[7]: laststate})
             summary_writer.add_summary(summary_str, global_t)
             summary_writer.flush()
             #try:
