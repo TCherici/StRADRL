@@ -12,7 +12,7 @@ def get_options(option_type):
     'training' or 'diplay' or 'visualize'
   """    
   # name
-  tf.app.flags.DEFINE_string("training_name","pro_1aux_2e-5_lamb09_10hz_smallexp","name of next training in log")
+  tf.app.flags.DEFINE_string("training_name","pro_1aux_2e-5_lamb09_10hz","name of next training in log")
     
   # Common
   tf.app.flags.DEFINE_string("env_type", "maze", "environment type (lab or gym or maze)")
@@ -33,7 +33,7 @@ def get_options(option_type):
     tf.app.flags.DEFINE_string("temp_dir", "/tmp/StRADRL/tensorboard/", "base directory for tensorboard")
     tf.app.flags.DEFINE_string("log_dir", "/tmp/StRADRL/log/", "base directory for logs")
     tf.app.flags.DEFINE_integer("local_t_max", 20, "repeat step size")
-    tf.app.flags.DEFINE_integer("max_time_step", 10**7, "max time steps")
+    tf.app.flags.DEFINE_integer("max_time_step", 10**2, "max time steps")
     tf.app.flags.DEFINE_integer("save_interval_step", 10**4, "saving interval steps")
     tf.app.flags.DEFINE_boolean("grad_norm_clip", 40.0, "gradient norm clipping")
 
@@ -50,7 +50,7 @@ def get_options(option_type):
     tf.app.flags.DEFINE_float("gamma_pc", 0.9, "discount factor for pixel control")
     tf.app.flags.DEFINE_float("pixel_change_lambda", 0.0001, "pixel change lambda") # 0.05, 0.01 ~ 0.1 for lab, 0.0001 ~ 0.01 for gym
     tf.app.flags.DEFINE_float("temporal_coherence_lambda", 10., "temporal coherence lambda") #@TODO check values
-    tf.app.flags.DEFINE_integer("experience_history_size", 300, "experience replay buffer size")
+    tf.app.flags.DEFINE_integer("experience_history_size", 500, "experience replay buffer size")
     
     # queuer
     tf.app.flags.DEFINE_integer("queue_length", 5, "max number of batches (of length local_t_max) in queue")

@@ -11,6 +11,7 @@ import signal
 import random
 import math
 import os
+import sys
 import time
 import logging
 
@@ -66,10 +67,8 @@ class Application(object):
             if self.stop_requested:
                 break
             if self.terminate_requested:
-                trainer.stop()
                 break
             if self.global_t > flags.max_time_step:
-                trainer.stop()
                 break
             if self.global_t > self.next_save_steps:
                 # Save checkpoint
@@ -85,6 +84,8 @@ class Application(object):
                                           self.summary_values,
                                           flags.base_lambda)
             self.global_t += diff_global_t
+        logger.warn("exiting training!")
+        self.environment.stop()
             
     def aux_train_function(self, aux_index):
         """ Train routine for aux_trainer. """
@@ -97,10 +98,8 @@ class Application(object):
             if self.stop_requested:
                 continue
             if self.terminate_requested:
-                trainer.stop()
                 break
             if self.global_t > flags.max_time_step:
-                trainer.stop()
                 break
             
             diff_aux_t = trainer.process(self.sess,
@@ -275,8 +274,8 @@ class Application(object):
         logger.debug(threading.enumerate())
 
         logger.info('Press Ctrl+C to stop')
-        signal.pause()
-    
+        #signal.pause()
+        
     
     def init_tensorboard(self):
         # tensorboard summary for base 
@@ -375,7 +374,6 @@ class Application(object):
         logger.warn('Ctrl+C detected, shutting down...')
         logger.info('run name: {} -- terminated'.format(TRAINING_NAME))
         self.terminate_requested = True
-
 
 def main(argv):
     app = Application()
