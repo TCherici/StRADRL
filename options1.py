@@ -12,7 +12,7 @@ def get_options(option_type):
     'training' or 'diplay' or 'visualize'
   """    
   # name
-  tf.app.flags.DEFINE_string("training_name","pro_1aux_2e-5_lamb09_10hz","name of next training in log")
+  tf.app.flags.DEFINE_string("training_name","pro_vr","name of next training in log")
     
   # Common
   tf.app.flags.DEFINE_string("env_type", "maze", "environment type (lab or gym or maze)")
@@ -20,7 +20,7 @@ def get_options(option_type):
   tf.app.flags.DEFINE_integer("env_max_steps", 150, "max number of steps in environment")
   
   tf.app.flags.DEFINE_boolean("use_pixel_change", False, "whether to use pixel change")
-  tf.app.flags.DEFINE_boolean("use_value_replay", False, "whether to use value function replay")
+  tf.app.flags.DEFINE_boolean("use_value_replay", True, "whether to use value function replay")
   tf.app.flags.DEFINE_boolean("use_reward_prediction", False, "whether to use reward prediction")
   tf.app.flags.DEFINE_boolean("use_temporal_coherence", False, "whether to use temporal coherence")
   tf.app.flags.DEFINE_string("vision", "RGB", "visual input to use (RGB, D, RGBD)")
@@ -33,7 +33,7 @@ def get_options(option_type):
     tf.app.flags.DEFINE_string("temp_dir", "/tmp/StRADRL/tensorboard/", "base directory for tensorboard")
     tf.app.flags.DEFINE_string("log_dir", "/tmp/StRADRL/log/", "base directory for logs")
     tf.app.flags.DEFINE_integer("local_t_max", 20, "repeat step size")
-    tf.app.flags.DEFINE_integer("max_time_step", 10**5, "max time steps")
+    tf.app.flags.DEFINE_integer("max_time_step", 50000, "max time steps")
     tf.app.flags.DEFINE_integer("save_interval_step", 10**4, "saving interval steps")
     tf.app.flags.DEFINE_boolean("grad_norm_clip", 40.0, "gradient norm clipping")
 

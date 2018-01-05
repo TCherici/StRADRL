@@ -12,17 +12,17 @@ def get_options(option_type):
     'training' or 'diplay' or 'visualize'
   """    
   # name
-  tf.app.flags.DEFINE_string("training_name","pro_1aux_2e-5_lamb09_10hz","name of next training in log")
+  tf.app.flags.DEFINE_string("training_name","pro_all","name of next training in log")
     
   # Common
   tf.app.flags.DEFINE_string("env_type", "maze", "environment type (lab or gym or maze)")
   tf.app.flags.DEFINE_string("env_name", "seekavoid_arena_01",  "environment name (for lab)")
   tf.app.flags.DEFINE_integer("env_max_steps", 150, "max number of steps in environment")
   
-  tf.app.flags.DEFINE_boolean("use_pixel_change", False, "whether to use pixel change")
-  tf.app.flags.DEFINE_boolean("use_value_replay", False, "whether to use value function replay")
-  tf.app.flags.DEFINE_boolean("use_reward_prediction", False, "whether to use reward prediction")
-  tf.app.flags.DEFINE_boolean("use_temporal_coherence", False, "whether to use temporal coherence")
+  tf.app.flags.DEFINE_boolean("use_pixel_change", True, "whether to use pixel change")
+  tf.app.flags.DEFINE_boolean("use_value_replay", True, "whether to use value function replay")
+  tf.app.flags.DEFINE_boolean("use_reward_prediction", True, "whether to use reward prediction")
+  tf.app.flags.DEFINE_boolean("use_temporal_coherence", True, "whether to use temporal coherence")
   tf.app.flags.DEFINE_string("vision", "RGB", "visual input to use (RGB, D, RGBD)")
   tf.app.flags.DEFINE_integer("vis_h", 84, "input image height in pixels")
   tf.app.flags.DEFINE_integer("vis_w", 84, "input image width in pixels")
