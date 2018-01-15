@@ -25,7 +25,7 @@ from train.rmsprop_applier import RMSPropApplier
 from train.base_trainer import BaseTrainer
 from train.aux_trainer import AuxTrainer
 from queuer import RunnerThread
-from options5 import get_options
+from options import get_options
 
 # get command line args
 flags = get_options("training")
