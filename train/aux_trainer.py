@@ -14,7 +14,7 @@ import six.moves.queue as queue
 from collections import namedtuple
 
 from environment.environment import Environment
-from model.model import UnrealModel
+from model.fc_model import UnrealModel
 from train.experience import Experience, ExperienceFrame
 
 logger = logging.getLogger("StRADRL.aux_trainer")

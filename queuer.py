@@ -8,7 +8,7 @@ import six.moves.queue as queue
 import logging
 
 from environment.environment import Environment
-from model.model import UnrealModel
+from model.fc_model import UnrealModel
 
 logger = logging.getLogger('StRADRL.queuer')
 

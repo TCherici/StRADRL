@@ -12,7 +12,7 @@ def get_options(option_type):
     'training' or 'diplay' or 'visualize'
   """    
   # name
-  tf.app.flags.DEFINE_string("training_name","pro_1aux_2e-5_lamb09_10hz","name of next training in log")
+  tf.app.flags.DEFINE_string("training_name","test_fc_noaux_dropout","name of next training in log")
     
   # Common
   tf.app.flags.DEFINE_string("env_type", "maze", "environment type (lab or gym or maze)")
@@ -24,8 +24,8 @@ def get_options(option_type):
   tf.app.flags.DEFINE_boolean("use_reward_prediction", False, "whether to use reward prediction")
   tf.app.flags.DEFINE_boolean("use_temporal_coherence", False, "whether to use temporal coherence")
   tf.app.flags.DEFINE_string("vision", "RGB", "visual input to use (RGB, D, RGBD)")
-  tf.app.flags.DEFINE_integer("vis_h", 84, "input image height in pixels")
-  tf.app.flags.DEFINE_integer("vis_w", 84, "input image width in pixels")
+  tf.app.flags.DEFINE_integer("vis_h", 7, "input image height in pixels")
+  tf.app.flags.DEFINE_integer("vis_w", 7, "input image width in pixels")
   tf.app.flags.DEFINE_string("checkpoint_dir", "/tmp/StRADRL/checkpoints", "checkpoint directory")
 
   # For training
@@ -33,7 +33,7 @@ def get_options(option_type):
     tf.app.flags.DEFINE_string("temp_dir", "/tmp/StRADRL/tensorboard/", "base directory for tensorboard")
     tf.app.flags.DEFINE_string("log_dir", "/tmp/StRADRL/log/", "base directory for logs")
     tf.app.flags.DEFINE_integer("local_t_max", 20, "repeat step size")
-    tf.app.flags.DEFINE_integer("max_time_step", 10**5, "max time steps")
+    tf.app.flags.DEFINE_integer("max_time_step", 10**6, "max time steps")
     tf.app.flags.DEFINE_integer("save_interval_step", 10**4, "saving interval steps")
     tf.app.flags.DEFINE_boolean("grad_norm_clip", 40.0, "gradient norm clipping")
 
@@ -44,8 +44,8 @@ def get_options(option_type):
     tf.app.flags.DEFINE_float("base_lambda", 0.9, "generalized adv. est. lamba for short-long sight")
     
     # auxiliary
-    tf.app.flags.DEFINE_integer("parallel_size", 1, "parallel thread size")
-    tf.app.flags.DEFINE_float("aux_initial_learning_rate", 2e-5, "learning rate")
+    tf.app.flags.DEFINE_integer("parallel_size", 0, "parallel thread size")
+    tf.app.flags.DEFINE_float("aux_initial_learning_rate", 1e-4, "learning rate")
     tf.app.flags.DEFINE_float("aux_lambda", 0.9, "generalized adv. est. lamba for short-long sight (aux)")
     tf.app.flags.DEFINE_float("gamma_pc", 0.9, "discount factor for pixel control")
     tf.app.flags.DEFINE_float("pixel_change_lambda", 0.0001, "pixel change lambda") # 0.05, 0.01 ~ 0.1 for lab, 0.0001 ~ 0.01 for gym
@@ -55,7 +55,7 @@ def get_options(option_type):
     # queuer
     tf.app.flags.DEFINE_integer("queue_length", 5, "max number of batches (of length local_t_max) in queue")
     tf.app.flags.DEFINE_integer("env_runner_sync", 1, "number of env episodes before sync to global")
-    tf.app.flags.DEFINE_float("action_freq", 10.,  "number of actions per second in env")
+    tf.app.flags.DEFINE_float("action_freq", 0,  "number of actions per second in env")
     
 
   # For display

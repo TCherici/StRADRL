@@ -17,7 +17,7 @@ import logging
 
 from helper import logger_init, generate_id
 from environment.environment import Environment
-from model.model import UnrealModel
+from model.fc_model import UnrealModel
 #from model.base import BaseModel
 from train.experience import Experience
 from train.adam_applier import AdamApplier

@@ -60,8 +60,8 @@ class Environment(object):
     return a.reshape(sh).mean(-1).mean(1)  
 
   def _calc_pixel_change(self, state, last_state):
-    d = np.absolute(state[2:-2,2:-2,:] - last_state[2:-2,2:-2,:])
+    #d = np.absolute(state[2:-2,2:-2,:] - last_state[2:-2,2:-2,:])
     # (80,80,3)
-    m = np.mean(d, 2)
-    c = self._subsample(m, 4)
-    return c
+    #m = np.mean(d, 2)
+    #c = self._subsample(m, 4)
+    return state-last_state

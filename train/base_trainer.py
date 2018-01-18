@@ -14,7 +14,7 @@ import six.moves.queue as queue
 from collections import namedtuple
 
 from environment.environment import Environment
-from model.model import UnrealModel
+from model.fc_model import UnrealModel
 from train.experience import Experience, ExperienceFrame
 
 logger = logging.getLogger("StRADRL.base_trainer")
@@ -206,7 +206,7 @@ class BaseTrainer(object):
             self.local_network.base_a: batch.a,
             self.local_network.base_adv: batch.adv,
             self.local_network.base_r: batch.r,
-            self.local_network.base_initial_lstm_state: batch.features[0],
+            #self.local_network.base_initial_lstm_state: batch.features[0],
             # [common]
             self.learning_rate_input: cur_learning_rate
         }
