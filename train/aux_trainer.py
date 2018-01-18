@@ -294,7 +294,7 @@ class AuxTrainer(object):
                 self.local_network.base_a: batch.a,
                 self.local_network.base_adv: batch.adv,
                 self.local_network.base_r: batch.r,
-                self.local_network.base_initial_lstm_state: batch.features,
+                #self.local_network.base_initial_lstm_state: batch.features,
                 # [common]
                 self.learning_rate_input: cur_learning_rate
         }

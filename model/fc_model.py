@@ -143,15 +143,15 @@ class UnrealModel(object):
             # Weight for policy output layer
             W_fc_1, b_fc_1 = self._fc_variable([7*7*self._ch_num, 256], "base_fc_1")
             W_fc_2, b_fc_2 = self._fc_variable([256, 256], "base_fc_2")
-            W_fc_3, b_fc_3 = self._fc_variable([256, 256], "base_fc_3")
+            #W_fc_3, b_fc_3 = self._fc_variable([256, 256], "base_fc_3")
             
             out_fc_1 = tf.nn.dropout(tf.nn.relu(tf.matmul(state_input, W_fc_1) + b_fc_1),0.5)            
             out_fc_2 = tf.nn.dropout(tf.nn.relu(tf.matmul(out_fc_1, W_fc_2) + b_fc_2),0.5)
-            out_fc_3 = tf.nn.dropout(tf.nn.relu(tf.matmul(out_fc_2, W_fc_3) + b_fc_3),0.5)
+            #out_fc_3 = tf.nn.dropout(tf.nn.relu(tf.matmul(out_fc_2, W_fc_3) + b_fc_3),0.5)
             
             self.reuse_lstm = True # "borrowed lstm reuse check"
         
-            return out_fc_3
+            return out_fc_2
         
         
     """    
