@@ -28,10 +28,10 @@ def worker(conn, render):
             if render:
                 env.render()
             #logger.warn("episode was reset")
-            logger.debug("reset output:{}".format(obs))
+            #logger.debug("reset output:{}".format(obs))
             conn.send(obs)
         elif command == COMMAND_ACTION:
-            logger.debug("action argument:".format(arg))
+            #logger.debug("action argument:".format(arg))
             obs, reward, terminal, _ = env.step(arg)
             if render:
                 env.render()
@@ -44,18 +44,40 @@ def worker(conn, render):
     conn.send(0)
     conn.close()
 
+"""
+{'_env_closer_id': 1, 
+  '_max_episode_seconds': None, 
+  'action_space': Box(17,), 
+  '_spec': None, 
+  '_closed': False, 
+  '_elapsed_steps': 0, 
+  '_episode_started_at': None, 
+  'observation_space': Box(376,), 
+  'reward_range': (-inf, inf), 
+  'env': <gym.envs.mujoco.humanoid.HumanoidEnv object at 0x7f9741b25f10>, 
+  '_max_episode_steps': 1000, 
+  'metadata': {'video.frames_per_second': 67, 
+               'render.modes': ['human', 'rgb_array']}
+  }
+"""
+
 class MujocoEnvironment(environment.Environment):
     @staticmethod
     def get_action_size():
         env = gym.make('Humanoid-v1')
-        action_size = env.action_space.n
+        action_size = np.asarray(env.action_space.high).shape[0]
+        #logger.debug("acsize:{}".format(action_size))
+        logger.debug("action_size:{}".format(action_size))
         env.close()
         return action_size
     
     def __init__(self):
+        logger.warn("!! hardcoding set render to true here !!")
+        render = True
+    
         environment.Environment.__init__(self)
         self.conn, child_conn = Pipe()
-        self.proc = Process(target=worker, args=(child_conn))
+        self.proc = Process(target=worker, args=(child_conn, render))
         self.proc.start()
         self.conn.recv()
 
@@ -67,7 +89,7 @@ class MujocoEnvironment(environment.Environment):
         
         self.last_state = obs
         
-        logger.debug("obs shape: {}".format(self.last_state.shape))
+        #logger.debug("obs shape: {}".format(self.last_state.shape))
         self.last_action = 0
         self.last_reward = 0
         last_action_reward = np.zeros([self.action_size+1])

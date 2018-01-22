@@ -125,12 +125,18 @@ def env_runner(env, sess, policy, num_local_steps, env_max_steps, action_freq, e
         for _ in range(num_local_steps):
             fetched = policy.run_base_policy_and_value(sess, last_state, last_action_reward)
             pi, value_, features = fetched[0], fetched[1], fetched[2:]
-            #@TODO decide if argmax or probability, if latter fix experience replay selection
-            chosenaction = boltzmann(pi)
-            #chosenaction = np.argmax(pi)
-            action = onehot(chosenaction, len(pi))
             
-            state, reward, terminal, pixel_change = env.process(chosenaction)
+            # give all actions, rescaled from 0.0/1.0 range to -0.4/0.4 range
+            #logger.debug("pi:{}".format(pi))
+            action = -0.4 + 0.8*pi
+            #logger.debug("action:{}".format(action))
+            
+            #@TODO decide if argmax or probability, if latter fix experience replay selection
+            #chosenaction = boltzmann(pi)
+            #chosenaction = np.argmax(pi)
+            #action = onehot(chosenaction, len(pi))
+            
+            state, reward, terminal, pixel_change = env.process(action)
             if action_freq > 0.:
                 time.sleep(1.0/action_freq)
             if render:

@@ -35,7 +35,7 @@ class Environment(object):
       from . import maze_environment_pro
       Environment.action_size = \
         maze_environment_pro.MazeEnvironment.get_action_size()
-    elif env_type == "lab":
+    elif env_type == 'lab':
       from . import lab_environment
       Environment.action_size = \
         lab_environment.LabEnvironment.get_action_size(env_name)

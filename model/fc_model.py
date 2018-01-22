@@ -47,7 +47,9 @@ class UnrealModel(object):
                 use_base=True):
         self._device = device
         self._action_size = action_size
-        self._ch_num = len(visinput[0])
+        #self._ch_num = len(visinput[0])
+        logger.warn("!! hardcoding observation size !!")
+        self.input_shape = [None, 376]        
         self._thread_index = thread_index
         self._use_pixel_change = use_pixel_change
         self._use_value_replay = use_value_replay
@@ -74,8 +76,8 @@ class UnrealModel(object):
         logger.debug("base:{} -- pc:{} -- vr:{} -- rp:{} -- tc:{}".format(self._use_base,self._use_pixel_change,\
                             self._use_value_replay,self._use_reward_prediction,self._use_temporal_coherence))
         with tf.device(self._device), tf.variable_scope(scope_name) as scope:
-            # lstm
-            self.lstm_cell = tf.contrib.rnn.BasicLSTMCell(256, state_is_tuple=True)
+            ## lstm
+            #self.lstm_cell = tf.contrib.rnn.BasicLSTMCell(256, state_is_tuple=True)
               
             # [base A3C network]
             if self._use_base:
@@ -105,14 +107,14 @@ class UnrealModel(object):
 
     def _create_base_network(self):
         # State (Base image input)
-        self.base_input = tf.placeholder("float", [None, 7, 7, self._ch_num], name="base_input")
+        self.base_input = tf.placeholder("float", self.input_shape, name="base_input")
         
-        self.base_flat = tf.reshape(self.base_input, [-1, 7*7*self._ch_num])
+        #self.base_flat = tf.reshape(self.base_input, [-1, 7*7*self._ch_num])
         # Last action and reward
         self.base_last_action_reward_input = tf.placeholder("float", [None, self._action_size+1])
         
         # Fully connected layers (we "borrow" the reuse_lstm boolean)
-        self.base_fc_outputs = self._fc_layers(self.base_flat, reuse=self.reuse_lstm)
+        self.base_fc_outputs = self._fc_layers(self.base_input, reuse=self.reuse_lstm)
         
         ## Conv layers
         #base_conv_output = self._base_conv_layers(self.base_input, reuse=self.reuse_conv)
@@ -141,7 +143,8 @@ class UnrealModel(object):
     def _fc_layers(self, state_input, reuse=False):
         with tf.variable_scope("base_fc", reuse=reuse) as scope:
             # Weight for policy output layer
-            W_fc_1, b_fc_1 = self._fc_variable([7*7*self._ch_num, 256], "base_fc_1")
+            #logger.debug(state_input.shape[1])
+            W_fc_1, b_fc_1 = self._fc_variable([self.input_shape[1], 256], "base_fc_1")
             W_fc_2, b_fc_2 = self._fc_variable([256, 256], "base_fc_2")
             #W_fc_3, b_fc_3 = self._fc_variable([256, 256], "base_fc_3")
             
@@ -225,8 +228,10 @@ class UnrealModel(object):
             tf.summary.histogram("policyb", b_fc_p)
             
             # Policy (output)
+            logger.warn(" !! doing some tricks with the policy layer, have a look !!")
             base_pi_linear = tf.matmul(lstm_outputs, W_fc_p) + b_fc_p
-            base_pi = tf.nn.softmax(base_pi_linear)
+            #base_pi = tf.nn.softmax(base_pi_linear)
+            base_pi = base_pi_linear
             base_pi_log = tf.nn.log_softmax(base_pi_linear)
             
             # set reuse to True to make aux tasks reuse the variables

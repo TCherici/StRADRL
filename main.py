@@ -289,7 +289,7 @@ class Application(object):
         self.base_entropy = tf.placeholder(tf.float32)
         self.base_gradient = tf.placeholder(tf.float32)
         self.base_lr = tf.placeholder(tf.float32)
-        self.laststate = tf.placeholder(tf.float32, [1, flags.vis_w, flags.vis_h, len(flags.vision)], name="laststate")
+        #self.laststate = tf.placeholder(tf.float32, [1, flags.vis_w, flags.vis_h, len(flags.vision)], name="laststate")
         score = tf.summary.scalar("env/score", self.score_input)
         epl = tf.summary.scalar("env/ep_length", self.epl_input)
         policy_loss = tf.summary.scalar("base/policy_loss", self.policy_loss)
@@ -297,9 +297,9 @@ class Application(object):
         entropy = tf.summary.scalar("base/entropy", self.base_entropy)
         gradient = tf.summary.scalar("base/gradient", self.base_gradient)
         lr = tf.summary.scalar("base/learning_rate", self.base_lr)
-        laststate = tf.summary.image("base/laststate", self.laststate)
+        #laststate = tf.summary.image("base/laststate", self.laststate)
 
-        self.summary_values = [self.score_input, self.epl_input, self.policy_loss, self.value_loss, self.base_entropy, self.base_gradient, self.base_lr, self.laststate]
+        self.summary_values = [self.score_input, self.epl_input, self.policy_loss, self.value_loss, self.base_entropy, self.base_gradient, self.base_lr]#, self.laststate]
         self.summary_op = tf.summary.merge_all() # we want to merge model histograms as well here
         
         # tensorboard summary for aux
