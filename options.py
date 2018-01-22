@@ -15,7 +15,7 @@ def get_options(option_type):
   tf.app.flags.DEFINE_string("training_name","fc_1aux_10hz_1e-4_2e-5","name of next training in log")
     
   # Common
-  tf.app.flags.DEFINE_string("env_type", "maze", "environment type (lab or gym or maze)")
+  tf.app.flags.DEFINE_string("env_type", "mujoco", "environment type (lab or gym or maze)")
   tf.app.flags.DEFINE_string("env_name", "seekavoid_arena_01",  "environment name (for lab)")
   tf.app.flags.DEFINE_integer("env_max_steps", 150, "max number of steps in environment")
   

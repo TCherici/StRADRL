@@ -19,6 +19,9 @@ class Environment(object):
     elif env_type == 'lab':
       from . import lab_environment
       return lab_environment.LabEnvironment(env_name, visinput)
+    elif env_type == 'mujoco':
+      from . import mujoco_environment
+      return mujoco_environment.MujocoEnvironment()
     else:
       from . import gym_environment
       return gym_environment.GymEnvironment(env_name, visinput)
@@ -36,6 +39,10 @@ class Environment(object):
       from . import lab_environment
       Environment.action_size = \
         lab_environment.LabEnvironment.get_action_size(env_name)
+    elif env_type == 'mujoco':
+      from . import mujoco_environment
+      Environment.action_size = \
+        mujoco_environment.MujocoEnvironment.get_action_size()
     else:
       from . import gym_environment
       Environment.action_size = \

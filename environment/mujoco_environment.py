@@ -46,9 +46,11 @@ def worker(conn, render):
 
 class MujocoEnvironment(environment.Environment):
     @staticmethod
-    def get_action_size(env_name):
-        
-        return len(env.action_space)
+    def get_action_size():
+        env = gym.make('Humanoid-v1')
+        action_size = env.action_space.n
+        env.close()
+        return action_size
     
     def __init__(self):
         environment.Environment.__init__(self)
