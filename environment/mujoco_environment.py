@@ -104,7 +104,8 @@ class MujocoEnvironment(environment.Environment):
         logger.info("lab environment stopped")
     
     def process(self, action):
-        real_action = [action]
+        real_action = -0.4 + 0.8*action
+        logger.debug(real_action)
         self.conn.send([COMMAND_ACTION, real_action])
         obs, reward, terminal = self.conn.recv()
         if not terminal:

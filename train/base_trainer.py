@@ -148,7 +148,7 @@ class BaseTrainer(object):
         #logger.debug("adding batch to exp. len:{}".format(len(batch.si)))
         for k in range(len(batch.si)):
             state = batch.si[k]
-            action = np.argmax(batch.a[k])
+            action = batch.a[k]#np.argmax(batch.a[k])
             reward = batch.a_r[k][-1]
 
             self.episode_reward += reward
@@ -195,7 +195,7 @@ class BaseTrainer(object):
                 
         if self.local_t >= self.next_log_t:
             logger.info("localtime={}".format(self.local_t))
-            logger.info("action={}".format(batch.a[-1,:]))
+            logger.info("action={}".format(self.last_action))
             logger.info("V={}".format(batch.r[-1]))
             self.next_log_t += LOG_INTERVAL
         

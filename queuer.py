@@ -128,7 +128,8 @@ def env_runner(env, sess, policy, num_local_steps, env_max_steps, action_freq, e
             
             # give all actions, rescaled from 0.0/1.0 range to -0.4/0.4 range
             #logger.debug("pi:{}".format(pi))
-            action = -0.4 + 0.8*pi
+            #action = -0.4 + 0.8*pi
+            action = pi
             #logger.debug("action:{}".format(action))
             
             #@TODO decide if argmax or probability, if latter fix experience replay selection

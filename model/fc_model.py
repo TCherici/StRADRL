@@ -228,10 +228,10 @@ class UnrealModel(object):
             tf.summary.histogram("policyb", b_fc_p)
             
             # Policy (output)
-            logger.warn(" !! doing some tricks with the policy layer, have a look !!")
+            #logger.warn(" !! doing some tricks with the policy layer, have a look !!")
             base_pi_linear = tf.matmul(lstm_outputs, W_fc_p) + b_fc_p
-            #base_pi = tf.nn.softmax(base_pi_linear)
-            base_pi = base_pi_linear
+            base_pi = tf.nn.softmax(base_pi_linear)
+            #base_pi = base_pi_linear
             base_pi_log = tf.nn.log_softmax(base_pi_linear)
             
             # set reuse to True to make aux tasks reuse the variables
@@ -249,6 +249,8 @@ class UnrealModel(object):
             tf.summary.histogram("valueb", b_fc_v)
             
             # Value (output)
+            #logger.warn("!! ELU set for value !!")
+            #v_ = tf.nn.elu(tf.matmul(lstm_outputs, W_fc_v) + b_fc_v)
             v_ = tf.matmul(lstm_outputs, W_fc_v) + b_fc_v
             base_v = tf.reshape( v_, [-1] )
 
