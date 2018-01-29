@@ -33,6 +33,7 @@ class AuxTrainer(object):
                 use_value_replay,
                 use_reward_prediction,
                 use_temporal_coherence,
+                value_lambda,
                 pixel_change_lambda,
                 temporal_coherence_lambda,
                 initial_learning_rate,
@@ -82,6 +83,7 @@ class AuxTrainer(object):
                                          use_temporal_coherence,
                                          pixel_change_lambda,
                                          temporal_coherence_lambda,
+                                         value_lambda=value_lambda,
                                          use_base=True)
         self.local_network.prepare_loss()
         self.global_network = global_network

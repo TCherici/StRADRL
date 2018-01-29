@@ -61,7 +61,8 @@ class BaseTrainer(object):
                gamma,
                experience,
                max_global_time_step,
-               device):
+               device,
+               value_lambda):
         self.runner = runner
         self.learning_rate_input = learning_rate_input
         self.env_type = env_type
@@ -75,7 +76,8 @@ class BaseTrainer(object):
                                          self.obs_size,
                                          1,
                                          entropy_beta,
-                                         device)
+                                         device,
+                                         value_lambda=value_lambda)
 
         self.local_network.prepare_loss()
         

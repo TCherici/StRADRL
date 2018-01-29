@@ -136,12 +136,13 @@ class Application(object):
                                           -1,
                                           flags.entropy_beta,
                                           device,
-                                          flags.use_pixel_change,
-                                          flags.use_value_replay,
-                                          flags.use_reward_prediction,
-                                          flags.use_temporal_coherence,
-                                          flags.pixel_change_lambda,
-                                          flags.temporal_coherence_lambda)
+                                          use_pixel_change=flags.use_pixel_change,
+                                          use_value_replay=flags.use_value_replay,
+                                          use_reward_prediction=flags.use_reward_prediction,
+                                          use_temporal_coherence=flags.use_temporal_coherence,
+                                          value_lambda=flags.value_lambda,
+                                          pixel_change_lambda=flags.pixel_change_lambda,
+                                          temporal_coherence_lambda=flags.temporal_coherence_lambda)
         logger.debug("done loading global model")
         learning_rate_input = tf.placeholder("float")
         
@@ -189,7 +190,8 @@ class Application(object):
                                         flags.gamma,
                                         self.experience,
                                         flags.max_time_step,
-                                        device)
+                                        device,
+                                        flags.value_lambda)
         
         # Setup Aux Networks
         self.aux_trainers = []
@@ -200,6 +202,7 @@ class Application(object):
                                                 flags.use_value_replay,
                                                 flags.use_reward_prediction,
                                                 flags.use_temporal_coherence,
+                                                flags.value_lambda,
                                                 flags.pixel_change_lambda,
                                                 flags.temporal_coherence_lambda,
                                                 flags.aux_initial_learning_rate,

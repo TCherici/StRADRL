@@ -41,6 +41,7 @@ class UnrealModel(object):
                 use_value_replay=False,
                 use_reward_prediction=False,
                 use_temporal_coherence=False,
+                value_lambda=0.5,
                 pixel_change_lambda=0.,
                 temporal_coherence_lambda=0.,
                 for_display=False,
@@ -57,6 +58,7 @@ class UnrealModel(object):
         self._use_base = use_base
         self._pixel_change_lambda = pixel_change_lambda
         self._temporal_coherence_lambda = temporal_coherence_lambda
+        self._value_lambda = value_lambda
         self._entropy_beta = entropy_beta
         self.reuse_conv = False
         self.reuse_lstm = False
@@ -329,7 +331,7 @@ class UnrealModel(object):
         
         # Value loss (output)
         # (Learning rate for Critic is half of Actor's, so multiply by 0.5)
-        self.value_loss = 0.5 * tf.reduce_sum(tf.square(self.base_v - self.base_r))
+        self.value_loss = self._value_lambda * tf.reduce_sum(tf.square(self.base_v - self.base_r))
         
         # Policy entropy
         self.entropy = -tf.reduce_sum(self.base_pi * self.base_pi_log) * self._entropy_beta
