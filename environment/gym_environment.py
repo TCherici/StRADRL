@@ -14,14 +14,14 @@ COMMAND_RESET     = 0
 COMMAND_ACTION    = 1
 COMMAND_TERMINATE = 2
 
-
+"""
 def preprocess_frame(observation):
   # observation shape = (210, 160, 3)
   observation = observation.astype(np.float32)
   resized_observation = cv2.resize(observation, (84, 84))
   resized_observation = resized_observation / 255.0
   return resized_observation
-
+"""
 def worker(conn, env_name):
   env = gym.make(env_name)
   env.reset()
@@ -32,7 +32,8 @@ def worker(conn, env_name):
 
     if command == COMMAND_RESET:
       obs = env.reset()
-      state = preprocess_frame(obs)
+      #state = preprocess_frame(obs)
+      state = obs
       conn.send(state)
     elif command == COMMAND_ACTION:
       reward = 0
@@ -41,7 +42,8 @@ def worker(conn, env_name):
         reward += r
         if terminal:
           break
-      state = preprocess_frame(obs)
+      #state = preprocess_frame(obs)
+      state = obs
       conn.send([state, reward, terminal])
     elif command == COMMAND_TERMINATE:
       break
@@ -76,6 +78,10 @@ class GymEnvironment(environment.Environment):
     self.last_action = 0
     self.last_reward = 0
 
+    last_action_reward = np.zeros([self.action_size+1])
+        
+    return self.last_state, last_action_reward
+
   def stop(self):
     self.conn.send([COMMAND_TERMINATE, 0])
     ret = self.conn.recv()
@@ -87,7 +93,8 @@ class GymEnvironment(environment.Environment):
     self.conn.send([COMMAND_ACTION, action])
     state, reward, terminal = self.conn.recv()
     
-    pixel_change = self._calc_pixel_change(state, self.last_state)
+    #pixel_change = self._calc_pixel_change(state, self.last_state)
+    pixel_change = []
     self.last_state = state
     self.last_action = action
     self.last_reward = reward

@@ -24,7 +24,7 @@ class Environment(object):
       return mujoco_environment.MujocoEnvironment()
     else:
       from . import gym_environment
-      return gym_environment.GymEnvironment(env_name, visinput)
+      return gym_environment.GymEnvironment(env_name)
   
   @staticmethod
   def get_action_size(env_type, env_name):
