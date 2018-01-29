@@ -126,14 +126,13 @@ class Application(object):
         self.aux_t = 0
         self.stop_requested = False
         self.terminate_requested = False
-        logger.debug("getting action size...")
-        visinput = [flags.vision, flags.vis_h, flags.vis_w]
-        action_size = Environment.get_action_size(flags.env_type,
-                                                  flags.env_name)
+        logger.debug("getting action size and observation size...")
+        action_size = Environment.get_action_size(flags.env_type, flags.env_name)
+        obs_size = Environment.get_obs_size(flags.env_type, flags.env_name)
         # Setup Global Network
         logger.debug("loading global model...")
         self.global_network = UnrealModel(action_size,
-                                          visinput,
+                                          obs_size,
                                           -1,
                                           flags.entropy_beta,
                                           device,
@@ -161,8 +160,7 @@ class Application(object):
         """                    
         # Start environment
         self.environment = Environment.create_environment(flags.env_type,
-                                                      flags.env_name,
-                                                      visinput)
+                                                      flags.env_name)
         logger.debug("done loading environment")
         
         # Setup runner
@@ -170,7 +168,7 @@ class Application(object):
                                    self.environment,
                                    self.global_network,
                                    action_size,
-                                   visinput,
+                                   obs_size,
                                    device,
                                    visualise)
         logger.debug("done setting up RunnerTread")
@@ -185,7 +183,6 @@ class Application(object):
                                         initial_learning_rate,
                                         learning_rate_input,
                                         grad_applier,
-                                        visinput,
                                         flags.env_type,
                                         flags.env_name,
                                         flags.entropy_beta,
@@ -208,7 +205,6 @@ class Application(object):
                                                 flags.aux_initial_learning_rate,
                                                 learning_rate_input,
                                                 grad_applier,
-                                                visinput,
                                                 self.aux_t,
                                                 flags.env_type,
                                                 flags.env_name,

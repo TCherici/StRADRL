@@ -55,7 +55,6 @@ class BaseTrainer(object):
                initial_learning_rate,
                learning_rate_input,
                grad_applier,
-               visinput,
                env_type,
                env_name,
                entropy_beta,
@@ -70,9 +69,10 @@ class BaseTrainer(object):
         self.gamma = gamma
         self.max_global_time_step = max_global_time_step
         self.action_size = Environment.get_action_size(env_type, env_name)
+        self.obs_size = Environment.get_obs_size(env_type, env_name)
         self.global_network = global_network
         self.local_network = UnrealModel(self.action_size,
-                                         visinput,
+                                         self.obs_size,
                                          1,
                                          entropy_beta,
                                          device)

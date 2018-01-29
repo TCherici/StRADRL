@@ -7,12 +7,15 @@ from multiprocessing import Process, Pipe
 import numpy as np
 import cv2
 import gym
+import logging
 
 from environment import environment
 
 COMMAND_RESET     = 0
 COMMAND_ACTION    = 1
 COMMAND_TERMINATE = 2
+
+logger = logging.getLogger("StRADRL.gym_environment")
 
 """
 def preprocess_frame(observation):
@@ -61,6 +64,13 @@ class GymEnvironment(environment.Environment):
     action_size = env.action_space.n
     env.close()
     return action_size
+    
+  @staticmethod  
+  def get_obs_size(env_name):
+    env = gym.make(env_name)
+    obs_size = np.size(env.reset())
+    env.close()
+    return obs_size
   
   def __init__(self, env_name):
     environment.Environment.__init__(self)
@@ -89,7 +99,8 @@ class GymEnvironment(environment.Environment):
     self.proc.join()
     print("gym environment stopped")
 
-  def process(self, action):
+  def process(self, action_oh):
+    action = np.argmax(action_oh)
     self.conn.send([COMMAND_ACTION, action])
     state, reward, terminal = self.conn.recv()
     

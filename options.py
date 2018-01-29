@@ -12,7 +12,7 @@ def get_options(option_type):
     'training' or 'diplay' or 'visualize'
   """    
   # name
-  tf.app.flags.DEFINE_string("training_name","test_oldpolicy","name of next training in log")
+  tf.app.flags.DEFINE_string("training_name","CartPole-v0","name of next training in log")
     
   # Common
   tf.app.flags.DEFINE_string("env_type", "gym", "environment type (lab or gym or maze)")
@@ -23,9 +23,6 @@ def get_options(option_type):
   tf.app.flags.DEFINE_boolean("use_value_replay", False, "whether to use value function replay")
   tf.app.flags.DEFINE_boolean("use_reward_prediction", False, "whether to use reward prediction")
   tf.app.flags.DEFINE_boolean("use_temporal_coherence", False, "whether to use temporal coherence")
-  tf.app.flags.DEFINE_string("vision", "RGB", "visual input to use (RGB, D, RGBD)")
-  tf.app.flags.DEFINE_integer("vis_h", 7, "input image height in pixels")
-  tf.app.flags.DEFINE_integer("vis_w", 7, "input image width in pixels")
   tf.app.flags.DEFINE_string("checkpoint_dir", "/tmp/StRADRL/checkpoints", "checkpoint directory")
 
   # For training

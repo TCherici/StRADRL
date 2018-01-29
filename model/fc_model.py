@@ -33,7 +33,7 @@ class UnrealModel(object):
     """
     def __init__(self,
                 action_size,
-                visinput,
+                obs_size,
                 thread_index, # -1 for global
                 entropy_beta,
                 device,
@@ -47,9 +47,8 @@ class UnrealModel(object):
                 use_base=True):
         self._device = device
         self._action_size = action_size
-        #self._ch_num = len(visinput[0])
-        logger.warn("!! hardcoding observation size !!")
-        self.input_shape = [None, 376]        
+        self._obs_size = obs_size
+        self.input_shape = [None, self._obs_size]     
         self._thread_index = thread_index
         self._use_pixel_change = use_pixel_change
         self._use_value_replay = use_value_replay
@@ -144,7 +143,7 @@ class UnrealModel(object):
         with tf.variable_scope("base_fc", reuse=reuse) as scope:
             # Weight for policy output layer
             #logger.debug(state_input.shape[1])
-            W_fc_1, b_fc_1 = self._fc_variable([self.input_shape[1], 256], "base_fc_1")
+            W_fc_1, b_fc_1 = self._fc_variable([self._obs_size, 256], "base_fc_1")
             W_fc_2, b_fc_2 = self._fc_variable([256, 256], "base_fc_2")
             #W_fc_3, b_fc_3 = self._fc_variable([256, 256], "base_fc_3")
             
@@ -453,11 +452,7 @@ class UnrealModel(object):
         dst_vars = self.get_vars()
 
         sync_ops = []
-        logger.debug("sync:{}".format(name))
-        """
-        # DOESNT WORK!!!
-        return tf.group(*[v1.assign(v2) for v1, v2 in zip(src_vars, dst_vars)])
-        """
+
         with tf.device(self._device):
             with tf.name_scope(None, "UnrealModel", []) as scopename:
                 for(src_var, dst_var) in zip(src_vars, dst_vars):

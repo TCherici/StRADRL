@@ -38,7 +38,6 @@ class AuxTrainer(object):
                 initial_learning_rate,
                 learning_rate_input,
                 grad_applier,
-                visinput,
                 aux_t,
                 env_type,
                 env_name,
@@ -70,9 +69,10 @@ class AuxTrainer(object):
         self.experience = experience
         self.max_global_time_step = max_global_time_step
         self.action_size = Environment.get_action_size(env_type, env_name)
+        self.obs_size = Environment.get_obs_size(env_type, env_name)
         self.thread_index = thread_index
         self.local_network = UnrealModel(self.action_size,
-                                         visinput,
+                                         self.obs_size,
                                          self.thread_index,
                                          self.entropy_beta,
                                          device,

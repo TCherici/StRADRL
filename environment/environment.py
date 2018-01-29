@@ -10,15 +10,17 @@ import cv2
 class Environment(object):
   # cached action size
   action_size = -1
+  # cached obs size
+  obs_size = -1
   
   @staticmethod
-  def create_environment(env_type, env_name, visinput):
+  def create_environment(env_type, env_name):
     if env_type == 'maze':
       from . import maze_environment_pro
       return maze_environment_pro.MazeEnvironment()
     elif env_type == 'lab':
       from . import lab_environment
-      return lab_environment.LabEnvironment(env_name, visinput)
+      return lab_environment.LabEnvironment(env_name)
     elif env_type == 'mujoco':
       from . import mujoco_environment
       return mujoco_environment.MujocoEnvironment()
@@ -48,6 +50,16 @@ class Environment(object):
       Environment.action_size = \
         gym_environment.GymEnvironment.get_action_size(env_name)
     return Environment.action_size
+    
+  @staticmethod
+  def get_obs_size(env_type, env_name):
+    if Environment.obs_size >= 0:
+      return Environment.obs_size
+    
+    from . import gym_environment
+    Environment.obs_size = \
+      gym_environment.GymEnvironment.get_obs_size(env_name)
+    return Environment.obs_size
 
   def __init__(self):
     pass
