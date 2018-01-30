@@ -83,8 +83,8 @@ class AuxTrainer(object):
                                          use_temporal_coherence,
                                          pixel_change_lambda,
                                          temporal_coherence_lambda,
-                                         value_lambda=value_lambda,
-                                         use_base=True)
+                                         value_lambda,
+                                         use_base=False)
         self.local_network.prepare_loss()
         self.global_network = global_network
         

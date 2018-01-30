@@ -12,7 +12,7 @@ def get_options(option_type):
     'training' or 'diplay' or 'visualize'
   """    
   # name
-  tf.app.flags.DEFINE_string("training_name","cartpolev1_lr1e-3_entr","name of next training in log")
+  tf.app.flags.DEFINE_string("training_name","cartpolev1_1aux_onlyvr_1e-3","name of next training in log")
     
   # Common
   tf.app.flags.DEFINE_string("env_type", "gym", "environment type (lab or gym or maze)")
@@ -20,7 +20,7 @@ def get_options(option_type):
   tf.app.flags.DEFINE_integer("env_max_steps", 400, "max number of steps in environment")
   
   tf.app.flags.DEFINE_boolean("use_pixel_change", False, "whether to use pixel change")
-  tf.app.flags.DEFINE_boolean("use_value_replay", False, "whether to use value function replay")
+  tf.app.flags.DEFINE_boolean("use_value_replay", True, "whether to use value function replay")
   tf.app.flags.DEFINE_boolean("use_reward_prediction", False, "whether to use reward prediction")
   tf.app.flags.DEFINE_boolean("use_temporal_coherence", False, "whether to use temporal coherence")
   tf.app.flags.DEFINE_string("checkpoint_dir", "/tmp/StRADRL/checkpoints", "checkpoint directory")
@@ -43,13 +43,13 @@ def get_options(option_type):
     
     
     # auxiliary
-    tf.app.flags.DEFINE_integer("parallel_size", 0, "parallel thread size")
-    tf.app.flags.DEFINE_float("aux_initial_learning_rate", 2e-5, "learning rate")
-    tf.app.flags.DEFINE_float("aux_lambda", 0.9, "generalized adv. est. lamba for short-long sight (aux)")
+    tf.app.flags.DEFINE_integer("parallel_size", 1, "parallel thread size")
+    tf.app.flags.DEFINE_float("aux_initial_learning_rate", 1e-3, "learning rate")
+    tf.app.flags.DEFINE_float("aux_lambda", 0.0, "generalized adv. est. lamba for short-long sight (aux)")
     tf.app.flags.DEFINE_float("gamma_pc", 0.9, "discount factor for pixel control")
     tf.app.flags.DEFINE_float("pixel_change_lambda", 0.0001, "pixel change lambda") # 0.05, 0.01 ~ 0.1 for lab, 0.0001 ~ 0.01 for gym
-    tf.app.flags.DEFINE_float("temporal_coherence_lambda", 10., "temporal coherence lambda") #@TODO check values
-    tf.app.flags.DEFINE_integer("experience_history_size", 500, "experience replay buffer size")
+    tf.app.flags.DEFINE_float("temporal_coherence_lambda", 1., "temporal coherence lambda") #@TODO check values
+    tf.app.flags.DEFINE_integer("experience_history_size", 100000, "experience replay buffer size")
     
     # queuer
     tf.app.flags.DEFINE_integer("queue_length", 5, "max number of batches (of length local_t_max) in queue")

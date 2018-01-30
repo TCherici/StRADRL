@@ -81,8 +81,8 @@ class UnrealModel(object):
             #self.lstm_cell = tf.contrib.rnn.BasicLSTMCell(256, state_is_tuple=True)
               
             # [base A3C network]
-            if self._use_base:
-                self._create_base_network()
+            #if self._use_base:
+            self._create_base_network()
 
             # [Pixel change network]
             if self._use_pixel_change:
@@ -98,9 +98,14 @@ class UnrealModel(object):
             if self._use_reward_prediction:
                 self._create_rp_network()
                 
+            # [Temporal Coherence network]
             if self._use_temporal_coherence:
                 self._create_tc_network()
-              
+            """
+            # [Proportionality network]    
+            if self._use_proportionality:
+                self._create_prop_network()
+            """
             self.reset_state()
 
             self.variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=scope_name)
@@ -157,68 +162,6 @@ class UnrealModel(object):
         
             return out_fc_2
         
-        
-    """    
-    def _base_conv_layers(self, state_input, reuse=False):
-        with tf.variable_scope("base_conv", reuse=reuse) as scope:
-            # Weights
-            W_conv1, b_conv1 = self._conv_variable([8, 8, self._ch_num, 16],  "base_conv1")
-            W_conv2, b_conv2 = self._conv_variable([4, 4, 16, 32], "base_conv2")
-            
-            # Nodes
-            h_conv1 = tf.nn.relu(self._conv2d(state_input, W_conv1, 4) + b_conv1) # stride=4
-            h_conv2 = tf.nn.relu(self._conv2d(h_conv1,     W_conv2, 2) + b_conv2) # stride=2
-            
-            # tensorboard summaries
-            #tf.summary.histogram("weights1", W_conv1)
-            #tf.summary.histogram("weights2", W_conv2)
-            #tf.summary.histogram("biases1", b_conv1)
-            #tf.summary.histogram("biases2", b_conv2)
-            
-            # set reuse to True to make other functions reuse the variables
-            self.reuse_conv = True
-            
-            return h_conv2
-  
-  
-    def _base_lstm_layer(self, conv_output, last_action_reward_input, initial_state_input,
-                       reuse=False):
-        with tf.variable_scope("base_lstm", reuse=reuse) as scope:
-            # Weights
-            W_fc1, b_fc1 = self._fc_variable([2592, 256], "base_fc1")
-
-            # Nodes
-            conv_output_flat = tf.reshape(conv_output, [-1, 2592])
-            # (-1,9,9,32) -> (-1,2592)
-            conv_output_fc = tf.nn.relu(tf.matmul(conv_output_flat, W_fc1) + b_fc1)
-            # (unroll_step, 256)
-
-            step_size = tf.shape(conv_output_fc)[:1]
-
-            lstm_input = tf.concat([conv_output_fc, last_action_reward_input], 1)
-            # (unroll_step, 256+action_size+1)
-
-            lstm_input_reshaped = tf.reshape(lstm_input, [1, -1, 256+self._action_size+1])
-            # (1, unroll_step, 256+action_size+1)
-
-            lstm_outputs, lstm_state = tf.nn.dynamic_rnn(self.lstm_cell,
-                                                         lstm_input_reshaped,
-                                                         initial_state = initial_state_input,
-                                                         sequence_length = step_size,
-                                                         time_major = False,
-                                                         scope = scope)
-            
-            lstm_outputs = tf.reshape(lstm_outputs, [-1,256])
-            #(1,unroll_step,256) for back prop, (1,1,256) for forward prop.
-            
-            # set reuse to True to make aux tasks reuse the variables
-            self.reuse_lstm = True
-            
-            # tensorboard summaries
-            #tf.summary.histogram("lstm_state", lstm_state)
-            #tf.summary.histogram("lstm_outputs", lstm_outputs)
-            return lstm_outputs, lstm_state
-    """
 
     def _base_policy_layer(self, lstm_outputs, reuse=False):
         with tf.variable_scope("base_policy", reuse=reuse) as scope:
@@ -264,22 +207,13 @@ class UnrealModel(object):
 
     def _create_vr_network(self):
         # State (Image input)
-        self.vr_input = tf.placeholder("float", [None, 84, 84, self._ch_num])
+        self.vr_input = tf.placeholder("float", self.input_shape, name="vr_input")
 
         # Last action and reward
         self.vr_last_action_reward_input = tf.placeholder("float", [None, self._action_size+1])
-
-        # VR conv layers
-        vr_conv_output = self._base_conv_layers(self.vr_input, reuse=self.reuse_conv)
-
-        # pc lastm layers
-        vr_initial_lstm_state = self.lstm_cell.zero_state(1, tf.float32)
-        # (Initial state is always resetted.)
         
-        vr_lstm_outputs, _ = self._base_lstm_layer(vr_conv_output,
-                                                   self.vr_last_action_reward_input,
-                                                   vr_initial_lstm_state,
-                                                   reuse=self.reuse_lstm)
+        vr_lstm_outputs = self._fc_layers(self.vr_input, reuse=self.reuse_lstm)
+        
         # value output
         self.vr_v  = self._base_value_layer(vr_lstm_outputs, reuse=self.reuse_value)
 
@@ -302,16 +236,15 @@ class UnrealModel(object):
     # temporal coherence
     def _create_tc_network(self):
         # State (Image input)
-        self.tc_input1 = tf.placeholder("float", [None, 84, 84, self._ch_num], name="tc_input1")
-        self.tc_input2 = tf.placeholder("float", [None, 84, 84, self._ch_num], name="tc_input2")
-        
+        self.tc_input1 = tf.placeholder("float", self.input_shape, name="tc_input1")
+        self.tc_input2 = tf.placeholder("float", self.input_shape, name="tc_input2")
+
         # tc conv layers
-        tc_output1 = self._base_conv_layers(self.tc_input1, reuse=self.reuse_conv)
-        tc_output2 = self._base_conv_layers(self.tc_input2, reuse=self.reuse_conv)
+        tc_output1 = self._fc_layers(self.tc_input1, reuse=self.reuse_lstm)
+        tc_output2 = self._fc_layers(self.tc_input2, reuse=self.reuse_lstm)
         
         # take diff of conv outputs
-        self.tc_q = tf.subtract(tc_output2, tc_output1)
-        
+        self.tc_q = tf.norm(tc_output2, tc_output1)
 
     def _base_loss(self):
         # [base A3C]
@@ -382,9 +315,12 @@ class UnrealModel(object):
     def prepare_loss(self):
         with tf.device(self._device):
             loss = tf.Variable(tf.zeros([], dtype=np.float32), name="loss")
-            if self._use_base:
-                self.base_loss = self._base_loss()
-                loss = loss + self.base_loss
+            loss_nullifier = tf.zeros([], dtype=np.float32)
+            
+            self.base_loss = self._base_loss()
+            if not self._use_base:
+                self.base_loss *= loss_nullifier
+            loss = loss +  self.base_loss
       
             if self._use_pixel_change:
                 self.pc_loss = self._pc_loss()
