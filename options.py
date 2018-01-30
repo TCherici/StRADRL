@@ -12,11 +12,11 @@ def get_options(option_type):
     'training' or 'diplay' or 'visualize'
   """    
   # name
-  tf.app.flags.DEFINE_string("training_name","Acrobot-v1_vl1e-2","name of next training in log")
+  tf.app.flags.DEFINE_string("training_name","cartpolev1_lr1e-3_entr","name of next training in log")
     
   # Common
   tf.app.flags.DEFINE_string("env_type", "gym", "environment type (lab or gym or maze)")
-  tf.app.flags.DEFINE_string("env_name", "Acrobot-v1",  "environment name (for lab)")
+  tf.app.flags.DEFINE_string("env_name", "CartPole-v1",  "environment name (for lab)")
   tf.app.flags.DEFINE_integer("env_max_steps", 400, "max number of steps in environment")
   
   tf.app.flags.DEFINE_boolean("use_pixel_change", False, "whether to use pixel change")
@@ -35,9 +35,9 @@ def get_options(option_type):
     tf.app.flags.DEFINE_boolean("grad_norm_clip", 40.0, "gradient norm clipping")
 
     #base
-    tf.app.flags.DEFINE_float("initial_learning_rate", 1e-4, "learning rate")
+    tf.app.flags.DEFINE_float("initial_learning_rate", 1e-3, "learning rate")
     tf.app.flags.DEFINE_float("gamma", 0.9, "discount factor for rewards")
-    tf.app.flags.DEFINE_float("entropy_beta", 0.0, "entropy regurarlization constant")
+    tf.app.flags.DEFINE_float("entropy_beta", 0.01, "entropy regurarlization constant")
     tf.app.flags.DEFINE_float("value_lambda", 0.01, "value ratio for base loss")
     tf.app.flags.DEFINE_float("base_lambda", 0.9, "generalized adv. est. lamba for short-long sight")
     
