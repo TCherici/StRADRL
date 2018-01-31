@@ -41,6 +41,7 @@ class UnrealModel(object):
                 use_value_replay=False,
                 use_reward_prediction=False,
                 use_temporal_coherence=False,
+                use_proportionality=False,
                 value_lambda=0.5,
                 pixel_change_lambda=0.,
                 temporal_coherence_lambda=0.,
@@ -55,6 +56,7 @@ class UnrealModel(object):
         self._use_value_replay = use_value_replay
         self._use_reward_prediction = use_reward_prediction
         self._use_temporal_coherence = use_temporal_coherence
+        self._use_proportionality = use_proportionality
         self._use_base = use_base
         self._pixel_change_lambda = pixel_change_lambda
         self._temporal_coherence_lambda = temporal_coherence_lambda
@@ -101,11 +103,11 @@ class UnrealModel(object):
             # [Temporal Coherence network]
             if self._use_temporal_coherence:
                 self._create_tc_network()
-            """
+            
             # [Proportionality network]    
             if self._use_proportionality:
                 self._create_prop_network()
-            """
+            
             self.reset_state()
 
             self.variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=scope_name)
@@ -150,8 +152,8 @@ class UnrealModel(object):
         with tf.variable_scope("base_fc", reuse=reuse) as scope:
             # Weight for policy output layer
             #logger.debug(state_input.shape[1])
-            W_fc_1, b_fc_1 = self._fc_variable([self._obs_size, 256], "base_fc_1")
-            W_fc_2, b_fc_2 = self._fc_variable([256, 256], "base_fc_2")
+            W_fc_1, b_fc_1 = self._fc_variable([self._obs_size, 64], "base_fc_1")
+            W_fc_2, b_fc_2 = self._fc_variable([64, 64], "base_fc_2")
             #W_fc_3, b_fc_3 = self._fc_variable([256, 256], "base_fc_3")
             
             out_fc_1 = tf.nn.dropout(tf.nn.relu(tf.matmul(state_input, W_fc_1) + b_fc_1),0.5)            
@@ -166,7 +168,7 @@ class UnrealModel(object):
     def _base_policy_layer(self, lstm_outputs, reuse=False):
         with tf.variable_scope("base_policy", reuse=reuse) as scope:
             # Weight for policy output layer
-            W_fc_p, b_fc_p = self._fc_variable([256, self._action_size], "base_fc_p")
+            W_fc_p, b_fc_p = self._fc_variable([64, self._action_size], "base_fc_p")
             
             tf.summary.histogram("policyW", W_fc_p)
             tf.summary.histogram("policyb", b_fc_p)
@@ -187,7 +189,7 @@ class UnrealModel(object):
     def _base_value_layer(self, lstm_outputs, reuse=False):
         with tf.variable_scope("base_value", reuse=reuse) as scope:
             # Weight for value output layer
-            W_fc_v, b_fc_v = self._fc_variable([256, 1], "base_fc_v")
+            W_fc_v, b_fc_v = self._fc_variable([64, 1], "base_fc_v")
             
             tf.summary.histogram("valueW", W_fc_v)
             tf.summary.histogram("valueb", b_fc_v)
@@ -243,8 +245,21 @@ class UnrealModel(object):
         tc_output1 = self._fc_layers(self.tc_input1, reuse=self.reuse_lstm)
         tc_output2 = self._fc_layers(self.tc_input2, reuse=self.reuse_lstm)
         
+        # loss is norm of fc output difference
+        self.tc_q = tf.reduce_mean(tf.subtract(tc_output2,tc_output1))
+        
+    # proportionality
+    def _create_prop_network(self):
+        # State (Image input)
+        self.prop_input1 = tf.placeholder("float", self.input_shape, name="prop_input1")
+        self.prop_input2 = tf.placeholder("float", self.input_shape, name="prop_input2")
+
+        # tc conv layers
+        prop_output1 = self._fc_layers(self.prop_input1, reuse=self.reuse_lstm)
+        prop_output2 = self._fc_layers(self.prop_input2, reuse=self.reuse_lstm)
+        
         # take diff of conv outputs
-        self.tc_q = tf.norm(tc_output2, tc_output1)
+        self.prop_q = tf.norm(prop_output2-prop_output1)
 
     def _base_loss(self):
         # [base A3C]
@@ -309,7 +324,7 @@ class UnrealModel(object):
     
     def _tc_loss(self):
         # temporal coherence loss
-        tc_loss = -self._temporal_coherence_lambda * tf.reduce_mean(tf.abs(self.tc_q))
+        tc_loss = self._temporal_coherence_lambda * self.tc_q
         return tc_loss
     
     def prepare_loss(self):
@@ -342,8 +357,7 @@ class UnrealModel(object):
 
 
     def reset_state(self):
-        self.base_lstm_state_out = tf.contrib.rnn.LSTMStateTuple(np.zeros([1, 256]),
-                                                             np.zeros([1, 256]))
+        self.base_lstm_state_out = []
                                                              
     def set_state(self, features):
         self.base_lstm_state_out = features#tf.contrib.rnn.LSTMStateTuple(features[0],features[1])
@@ -372,13 +386,6 @@ class UnrealModel(object):
                          feed_dict = {self.vr_input : [s_t],
                                       self.vr_last_action_reward_input : [last_action_reward]} )
         return vr_v_out[0]
-
-  
-    def run_rp_c(self, sess, s_t):
-        # For display tool
-        rp_c_out = sess.run( self.rp_c,
-                             feed_dict = {self.rp_input : s_t} )
-        return rp_c_out[0]
 
   
     def get_vars(self):

@@ -92,7 +92,7 @@ def boltzmann(pi_values):
     
     
 #@TODO implement
-def eps_greedy(pi_values, epsilon):
+def eps_greedy(pi_values, epsilon=0.1):
     if np.random.random() < epsilon:
         return np.random.choice(range(len(pi_values)))
     else:
@@ -131,7 +131,8 @@ def env_runner(env, sess, policy, num_local_steps, env_max_steps, action_freq, e
             #logger.debug("action:{}".format(action))
             
             #@TODO decide if argmax or probability, if latter fix experience replay selection
-            chosenaction = boltzmann(pi)
+            #chosenaction = boltzmann(pi)
+            chosenaction = eps_greedy(pi, epsilon=0.1)
             #chosenaction = np.argmax(pi)
             action = onehot(chosenaction, len(pi), dtype="int32")
             
