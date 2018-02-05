@@ -9,7 +9,7 @@ import logging
 
 logger = logging.getLogger('StRADRL.model')
 
-SEED = 1337
+SEED = 3000#1337
 
 # weight initialization based on muupan's code
 # https://github.com/muupan/async-rl/blob/master/a3c_ale.py
@@ -45,6 +45,7 @@ class UnrealModel(object):
                 value_lambda=0.5,
                 pixel_change_lambda=0.,
                 temporal_coherence_lambda=0.,
+                proportionality_lambda=0.,
                 for_display=False,
                 use_base=True):
         self._device = device
@@ -60,6 +61,7 @@ class UnrealModel(object):
         self._use_base = use_base
         self._pixel_change_lambda = pixel_change_lambda
         self._temporal_coherence_lambda = temporal_coherence_lambda
+        self._proportionality_lambda = proportionality_lambda
         self._value_lambda = value_lambda
         self._entropy_beta = entropy_beta
         self.reuse_conv = False
@@ -237,29 +239,36 @@ class UnrealModel(object):
          
     # temporal coherence
     def _create_tc_network(self):
-        # State (Image input)
+        # Observations (input)
         self.tc_input1 = tf.placeholder("float", self.input_shape, name="tc_input1")
         self.tc_input2 = tf.placeholder("float", self.input_shape, name="tc_input2")
 
-        # tc conv layers
+        # fc output is our internal state s
         tc_output1 = self._fc_layers(self.tc_input1, reuse=self.reuse_lstm)
         tc_output2 = self._fc_layers(self.tc_input2, reuse=self.reuse_lstm)
         
         # loss is norm of fc output difference
-        self.tc_q = tf.reduce_mean(tf.subtract(tc_output2,tc_output1))
+        self.tc_q = tf.reduce_mean(tf.abs(tc_output2-tc_output1))
         
     # proportionality
     def _create_prop_network(self):
-        # State (Image input)
-        self.prop_input1 = tf.placeholder("float", self.input_shape, name="prop_input1")
-        self.prop_input2 = tf.placeholder("float", self.input_shape, name="prop_input2")
+        # Observations (input)
+        self.prop_input1_1 = tf.placeholder("float", self.input_shape, name="prop_input1_1")
+        self.prop_input1_2 = tf.placeholder("float", self.input_shape, name="prop_input1_2")
+        self.prop_input2_1 = tf.placeholder("float", self.input_shape, name="prop_input2_1")
+        self.prop_input2_2 = tf.placeholder("float", self.input_shape, name="prop_input2_1")
+        # Boolean vector check for if actions 1 and 2 are equal
+        self.actioncheck = tf.placeholder("float", [None,], name="prop_actioncheck")
 
-        # tc conv layers
-        prop_output1 = self._fc_layers(self.prop_input1, reuse=self.reuse_lstm)
-        prop_output2 = self._fc_layers(self.prop_input2, reuse=self.reuse_lstm)
+        # get fc outputs (our internal state s)
+        prop_output1_1 = self._fc_layers(self.prop_input1_1, reuse=self.reuse_lstm)
+        prop_output1_2 = self._fc_layers(self.prop_input1_2, reuse=self.reuse_lstm)
+        prop_output2_1 = self._fc_layers(self.prop_input2_1, reuse=self.reuse_lstm)
+        prop_output2_2 = self._fc_layers(self.prop_input2_2, reuse=self.reuse_lstm)
         
-        # take diff of conv outputs
-        self.prop_q = tf.norm(prop_output2-prop_output1)
+        s1 = tf.reduce_mean(tf.abs(prop_output1_2-prop_output1_1),axis=1)
+        s2 = tf.reduce_mean(tf.abs(prop_output2_2-prop_output2_1),axis=1)
+        self.prop_q = tf.reduce_mean(tf.square(s2-s1)*self.actioncheck)
 
     def _base_loss(self):
         # [base A3C]
@@ -327,6 +336,11 @@ class UnrealModel(object):
         tc_loss = self._temporal_coherence_lambda * self.tc_q
         return tc_loss
     
+    def _prop_loss(self):
+        # temporal coherence loss
+        prop_loss = self._proportionality_lambda * self.prop_q
+        return prop_loss
+
     def prepare_loss(self):
         with tf.device(self._device):
             loss = tf.Variable(tf.zeros([], dtype=np.float32), name="loss")
@@ -352,6 +366,10 @@ class UnrealModel(object):
             if self._use_temporal_coherence:
                 self.tc_loss = self._tc_loss()
                 loss = loss + self.tc_loss
+                
+            if self._use_proportionality:
+                self.prop_loss = self._prop_loss()
+                loss = loss + self.prop_loss
             
             self.total_loss = loss
 

@@ -161,7 +161,7 @@ def env_runner(env, sess, policy, num_local_steps, env_max_steps, action_freq, e
                 last_state, last_action_reward = env.reset()
                 policy.reset_state()
                 last_features = policy.get_initial_features()
-                logger.info("Ep. finish. Tot rewards: %d. Length: %d" % (rewards, length))
+                #logger.info("Ep. finish. Tot rewards: %d. Length: %d" % (rewards, length))
                 if itercount % env_runner_sync == 0:
                     sess.run(syncfunc)
                 length = 0

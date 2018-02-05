@@ -40,7 +40,7 @@ def worker(conn, env_name):
       conn.send(state)
     elif command == COMMAND_ACTION:
       reward = 0
-      for i in range(1):
+      for i in range(4):
         obs, r, terminal, _ = env.step(arg)
         reward += r
         if terminal:

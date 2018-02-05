@@ -89,7 +89,6 @@ class Experience(object):
     # -1 for the case if start pos is the terminated frame.
     # (Then +1 not to start from terminated frame.)
     start_pos = np.random.randint(0, len(self._frames) - sequence_size -1)
-    #logger.debug("length frames:{}".format(len(self._frames)))
     if self._frames[start_pos].terminal:
       start_pos += 1
       # Assuming that there are no successive terminal frames.
@@ -103,7 +102,71 @@ class Experience(object):
         break
     
     return sampled_frames
-
+    
+  def sample_b2b_sequence(self, sequence_size):
+    start_pos = np.random.randint(0, len(self._frames) - sequence_size -1)
+    if self._frames[start_pos].terminal:
+      start_pos += 1
+      
+    seq1 = []
+    for i in range(sequence_size):
+      frame = self._frames[start_pos+i]
+      seq1.append(frame)
+      if frame.terminal:
+        break
+    #logger.debug("start_pos:{}".format(start_pos))
+    #logger.debug("seq1 length:{}".format(len(seq1)))
+    # get starting point for seq2 search (at least 100 steps further or an episode further)
+    search_start_2 = start_pos+i+1
+    #logger.debug("search_start_2:{}".format(search_start_2))
+    start_2 = None
+    for k in range(100):
+      if self._frames[search_start_2+k].terminal:
+        start_2 = search_start_2+k+1
+        break
+    # if after 100steps no terminal state is found, set 100th step as start
+    if start_2 is None:
+      start_2 = search_start_2+k
+    
+    #logger.debug("start_2:{}".format(start_2))
+    # try 10 times to get a sequence after seq1 of the same length
+    for trynum in range(10):
+      for l in range(len(seq1)):
+        if self._frames[start_2+l].terminal:
+          start_2 = start_2+l+1
+          #logger.debug("terminal at {}".format(start_2))
+          break
+      # else is run when no break occured in the above for loop 
+      #   (that is, no terminal states have been found, thus seq2 can be created)
+      else:
+        seq2 = []
+        for i in range(len(seq1)):
+          frame = self._frames[start_2+i]
+          seq2.append(frame)
+        assert len(seq1)==len(seq2)
+        return seq1, seq2
+    # else is run after 10 attempts to find a starting point for the second sequence
+    
+    raise TypeError("Couldn't find second start point")
+        
+  def sample_b2b_seq_recursive(self, sequence_size):
+    # try getting two random parallel sequences 
+    #   from two different episodes or at least 100 steps of distance
+    # if an error is called, recusively call own function to try again
+    k = 0
+    while True:
+      try:
+        k += 1
+        seq1 = []
+        seq2 = []
+        seq1, seq2 = self.sample_b2b_sequence(sequence_size)
+        return seq1, seq2
+      except:
+        #logger.debug("{} try".format(k))
+        if k > 10:
+          logger.warn("!!! B2B sampling may be broken??? !!!")
+    
+    
   
   def sample_rp_sequence(self):
     """

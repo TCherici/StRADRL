@@ -96,7 +96,7 @@ class Application(object):
         trainer = self.aux_trainers[aux_index]
         
         while True:
-            if self.global_t < 500:
+            if self.global_t < 1000:
                 continue
             if self.stop_requested:
                 continue
@@ -140,9 +140,11 @@ class Application(object):
                                           use_value_replay=flags.use_value_replay,
                                           use_reward_prediction=flags.use_reward_prediction,
                                           use_temporal_coherence=flags.use_temporal_coherence,
+                                          use_proportionality=flags.use_proportionality,
                                           value_lambda=flags.value_lambda,
                                           pixel_change_lambda=flags.pixel_change_lambda,
-                                          temporal_coherence_lambda=flags.temporal_coherence_lambda)
+                                          temporal_coherence_lambda=flags.temporal_coherence_lambda,
+                                          proportionality_lambda=flags.proportionality_lambda)
         logger.debug("done loading global model")
         learning_rate_input = tf.placeholder("float")
         
@@ -198,13 +200,16 @@ class Application(object):
         for k in range(flags.parallel_size):
             self.aux_trainers.append(AuxTrainer(self.global_network,
                                                 k+2, #-1 is global, 0 is runnerthread, 1 is base
+                                                flags.use_base,
                                                 flags.use_pixel_change, 
                                                 flags.use_value_replay,
                                                 flags.use_reward_prediction,
                                                 flags.use_temporal_coherence,
+                                                flags.use_proportionality,
                                                 flags.value_lambda,
                                                 flags.pixel_change_lambda,
                                                 flags.temporal_coherence_lambda,
+                                                flags.proportionality_lambda,
                                                 flags.aux_initial_learning_rate,
                                                 learning_rate_input,
                                                 grad_applier,
@@ -330,6 +335,10 @@ class Application(object):
             self.tc_loss = tf.placeholder(tf.float32)
             self.summary_aux.append(self.tc_loss)
             aux_losses.append(tf.summary.scalar("aux/tc_loss", self.tc_loss))
+        if flags.use_proportionality:
+            self.prop_loss = tf.placeholder(tf.float32)
+            self.summary_aux.append(self.prop_loss)
+            aux_losses.append(tf.summary.scalar("aux/prop_loss", self.prop_loss))
         
         # append entropy and gradient last
         self.summary_aux.append(self.aux_entropy)
