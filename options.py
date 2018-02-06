@@ -12,7 +12,7 @@ def get_options(option_type):
     'training' or 'diplay' or 'visualize'
   """    
   # name
-  tf.app.flags.DEFINE_string("training_name","aux_test_nothing","name of next training in log")
+  tf.app.flags.DEFINE_string("training_name","aux_test_laptop","name of next training in log")
     
   # Common
   tf.app.flags.DEFINE_string("env_type", "gym", "environment type (lab or gym or maze)")
