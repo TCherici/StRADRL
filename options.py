@@ -13,6 +13,7 @@ def get_options(option_type):
   """    
   # name
   tf.app.flags.DEFINE_string("training_name","aux_test_causv1","name of next training in log")
+
     
   # Common
   tf.app.flags.DEFINE_string("env_type", "gym", "environment type (lab or gym or maze)")
