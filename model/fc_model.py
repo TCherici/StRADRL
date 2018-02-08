@@ -43,11 +43,13 @@ class UnrealModel(object):
                 use_temporal_coherence=False,
                 use_proportionality=False,
                 use_causality=False,
+                use_repeatability=False,
                 value_lambda=0.5,
                 pixel_change_lambda=0.,
                 temporal_coherence_lambda=0.,
                 proportionality_lambda=0.,
                 causality_lambda=0.,
+                repeatability_lambda=0.,
                 for_display=False,
                 use_base=True):
         self._device = device
@@ -61,11 +63,13 @@ class UnrealModel(object):
         self._use_temporal_coherence = use_temporal_coherence
         self._use_proportionality = use_proportionality
         self._use_causality = use_causality
+        self._use_repeatability = use_repeatability
         self._use_base = use_base
         self._pixel_change_lambda = pixel_change_lambda
         self._temporal_coherence_lambda = temporal_coherence_lambda
         self._proportionality_lambda = proportionality_lambda
         self._causality_lambda = causality_lambda
+        self._repeatability_lambda = repeatability_lambda
         self._value_lambda = value_lambda
         self._entropy_beta = entropy_beta
         self.reuse_conv = False
@@ -117,6 +121,9 @@ class UnrealModel(object):
             # [Causality network]    
             if self._use_causality:
                 self._create_caus_network()
+                
+            if self._use_repeatability:
+                self._create_rep_network()
             
             self.reset_state()
 
@@ -166,8 +173,8 @@ class UnrealModel(object):
             W_fc_2, b_fc_2 = self._fc_variable([64, 64], "base_fc_2")
             #W_fc_3, b_fc_3 = self._fc_variable([256, 256], "base_fc_3")
             
-            out_fc_1 = tf.nn.dropout(tf.nn.relu(tf.matmul(state_input, W_fc_1) + b_fc_1),0.5)            
-            out_fc_2 = tf.nn.dropout(tf.nn.relu(tf.matmul(out_fc_1, W_fc_2) + b_fc_2),0.5)
+            out_fc_1 = tf.nn.relu(tf.matmul(state_input, W_fc_1) + b_fc_1)     
+            out_fc_2 = tf.nn.relu(tf.matmul(out_fc_1, W_fc_2) + b_fc_2)
             #out_fc_3 = tf.nn.dropout(tf.nn.relu(tf.matmul(out_fc_2, W_fc_3) + b_fc_3),0.5)
             
             self.reuse_lstm = True # "borrowed lstm reuse check"
@@ -256,7 +263,7 @@ class UnrealModel(object):
         tc_output2 = self._fc_layers(self.tc_input2, reuse=self.reuse_lstm)
         
         # loss is norm of fc output difference
-        self.tc_q = tf.reduce_mean(tf.abs(tc_output2-tc_output1))
+        self.tc_q = tf.reduce_mean(tf.norm(tc_output2-tc_output1))
         
     # proportionality
     def _create_prop_network(self):
@@ -264,7 +271,7 @@ class UnrealModel(object):
         self.prop_input1_1 = tf.placeholder("float", self.input_shape, name="prop_input1_1")
         self.prop_input1_2 = tf.placeholder("float", self.input_shape, name="prop_input1_2")
         self.prop_input2_1 = tf.placeholder("float", self.input_shape, name="prop_input2_1")
-        self.prop_input2_2 = tf.placeholder("float", self.input_shape, name="prop_input2_1")
+        self.prop_input2_2 = tf.placeholder("float", self.input_shape, name="prop_input2_2")
         # Boolean vector check for if actions 1 and 2 are equal
         self.prop_actioncheck = tf.placeholder("float", [None,], name="prop_actioncheck")
 
@@ -274,11 +281,11 @@ class UnrealModel(object):
         prop_output2_1 = self._fc_layers(self.prop_input2_1, reuse=self.reuse_lstm)
         prop_output2_2 = self._fc_layers(self.prop_input2_2, reuse=self.reuse_lstm)
         
-        s1 = tf.reduce_mean(tf.abs(prop_output1_2-prop_output1_1),axis=1)
-        s2 = tf.reduce_mean(tf.abs(prop_output2_2-prop_output2_1),axis=1)
-        statediff = tf.square(s2-s1)
+        prop_ds1 = tf.norm(prop_output1_2-prop_output1_1,axis=1)
+        prop_ds2 = tf.norm(prop_output2_2-prop_output2_1,axis=1)
+        prop_statediff = tf.square(prop_ds2-prop_ds1)
         
-        self.prop_q = tf.reduce_mean(statediff*self.prop_actioncheck)
+        self.prop_q = tf.reduce_mean(prop_statediff*self.prop_actioncheck)
         
     def _create_caus_network(self):
         # Observations (input)
@@ -292,10 +299,31 @@ class UnrealModel(object):
         caus_out1 = self._fc_layers(self.caus_input1, reuse=self.reuse_lstm)
         caus_out2 = self._fc_layers(self.caus_input2, reuse=self.reuse_lstm)
         
-        state_distance = -tf.exp(tf.reduce_mean(tf.square(caus_out2-caus_out1),axis=1))
+        caus_state_distance = tf.exp(-tf.norm(caus_out2-caus_out1,axis=1))
         
-        self.caus_q = tf.reduce_mean(state_distance*self.caus_actioncheck*self.caus_rewardcheck)
+        self.caus_q = tf.reduce_mean(caus_state_distance*self.caus_actioncheck*self.caus_rewardcheck)
         
+        
+    def _create_rep_network(self):
+        # Observations (input)
+        self.rep_input1_1 = tf.placeholder("float", self.input_shape, name="rep_input1_1")
+        self.rep_input1_2 = tf.placeholder("float", self.input_shape, name="rep_input1_2")
+        self.rep_input2_1 = tf.placeholder("float", self.input_shape, name="rep_input2_1")
+        self.rep_input2_2 = tf.placeholder("float", self.input_shape, name="rep_input2_2")
+        # Boolean vector check for if actions 1 and 2 are equal
+        self.rep_actioncheck = tf.placeholder("float", [None,], name="rep_actioncheck")
+
+        # get fc outputs (our internal state s)
+        rep_out1_1 = self._fc_layers(self.rep_input1_1, reuse=self.reuse_lstm)
+        rep_out1_2 = self._fc_layers(self.rep_input1_2, reuse=self.reuse_lstm)
+        rep_out2_1 = self._fc_layers(self.rep_input2_1, reuse=self.reuse_lstm)
+        rep_out2_2 = self._fc_layers(self.rep_input2_2, reuse=self.reuse_lstm)
+        
+        rep_sq_diff_s_change = tf.norm((rep_out2_2-rep_out2_1)-(rep_out1_2-rep_out1_1),axis=1)
+        
+        rep_state_distance = tf.exp(-tf.norm(rep_out2_1-rep_out1_1,axis=1))
+        
+        self.rep_q = tf.reduce_mean(rep_state_distance*rep_sq_diff_s_change*self.rep_actioncheck)
 
     def _base_loss(self):
         # [base A3C]
@@ -305,10 +333,11 @@ class UnrealModel(object):
         # Advantage (R-V) (input for policy)
         self.base_adv = tf.placeholder("float", [None])
                
+        base_a_ind = tf.argmax(self.base_a, axis=1)
         
+        neglogpac = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.base_pi, labels=base_a_ind)
         # Policy loss (output)
-        self.policy_loss = -tf.reduce_sum( tf.reduce_sum( self.base_pi_log * self.base_a, [1] ) *
-                                      self.base_adv )
+        self.policy_loss = tf.reduce_mean(self.base_adv * neglogpac)
         
         # R (input for value target)
         self.base_r = tf.placeholder("float", [None])
@@ -372,7 +401,12 @@ class UnrealModel(object):
         # temporal coherence loss
         caus_loss = self._causality_lambda * self.caus_q
         return caus_loss
-
+    
+    def _rep_loss(self):
+        # repeatability loss
+        rep_loss = self._repeatability_lambda * self.rep_q
+        return rep_loss
+        
     def prepare_loss(self):
         with tf.device(self._device):
             loss = tf.Variable(tf.zeros([], dtype=np.float32), name="loss")
@@ -406,6 +440,10 @@ class UnrealModel(object):
             if self._use_causality:
                 self.caus_loss = self._caus_loss()
                 loss = loss + self.caus_loss
+                
+            if self._use_repeatability:
+                self.rep_loss = self._rep_loss()
+                loss = loss + self.rep_loss
             
             self.total_loss = loss
 

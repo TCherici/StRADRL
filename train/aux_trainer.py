@@ -36,11 +36,13 @@ class AuxTrainer(object):
                 use_temporal_coherence,
                 use_proportionality,
                 use_causality,
+                use_repeatability,
                 value_lambda,
                 pixel_change_lambda,
                 temporal_coherence_lambda,
                 proportionality_lambda,
                 causality_lambda,
+                repeatability_lambda,
                 initial_learning_rate,
                 learning_rate_input,
                 grad_applier,
@@ -63,6 +65,7 @@ class AuxTrainer(object):
         self.use_temporal_coherence = use_temporal_coherence
         self.use_proportionality = use_proportionality
         self.use_causality = use_causality
+        self.use_repeatability = use_repeatability
         self.learning_rate_input = learning_rate_input
         self.env_type = env_type
         self.env_name = env_name
@@ -90,11 +93,13 @@ class AuxTrainer(object):
                                          use_temporal_coherence=use_temporal_coherence,
                                          use_proportionality=use_proportionality,
                                          use_causality=use_causality,
+                                         use_repeatability=use_repeatability,
                                          value_lambda=value_lambda,
                                          pixel_change_lambda=pixel_change_lambda,
                                          temporal_coherence_lambda=temporal_coherence_lambda,
                                          proportionality_lambda=proportionality_lambda,
                                          causality_lambda=causality_lambda,
+                                         repeatability_lambda=repeatability_lambda,
                                          for_display=False,
                                          use_base=use_base)
                                          
@@ -128,6 +133,8 @@ class AuxTrainer(object):
             self.aux_losses.append(self.local_network.prop_loss)
         if self.use_causality:
             self.aux_losses.append(self.local_network.caus_loss)
+        if self.use_repeatability:
+            self.aux_losses.append(self.local_network.rep_loss)
        
         
     def _anneal_learning_rate(self, global_time_step):
@@ -372,7 +379,7 @@ class AuxTrainer(object):
             feed_dict.update(rp_feed_dict)
         
         # [Robotic Priors]
-        if self.use_temporal_coherence or self.use_proportionality or self.use_causality:
+        if self.use_temporal_coherence or self.use_proportionality or self.use_causality or self.use_repeatability:
             bri11, bri12, bri21, bri22, sameact, diffrew = self._process_robotics()
             
         #logger.debug("sameact:{}".format(sameact))
@@ -403,7 +410,16 @@ class AuxTrainer(object):
                 self.local_network.caus_rewardcheck: np.asarray(diffrew)
             }
             feed_dict.update(caus_feed_dict)
-
+        
+        if self.use_repeatability:
+            rep_feed_dict = {
+                self.local_network.rep_input1_1: np.asarray(bri11),
+                self.local_network.rep_input1_2: np.asarray(bri12),
+                self.local_network.rep_input2_1: np.asarray(bri21),
+                self.local_network.rep_input2_2: np.asarray(bri22),
+                self.local_network.rep_actioncheck: np.asarray(sameact)
+            }
+            feed_dict.update(rep_feed_dict)
         
         # Calculate gradients and copy them to global netowrk.
         [_, grad], losses, entropy = sess.run([self.apply_gradients, self.aux_losses, self.local_network.entropy], feed_dict=feed_dict )
