@@ -141,10 +141,12 @@ class Application(object):
                                           use_reward_prediction=flags.use_reward_prediction,
                                           use_temporal_coherence=flags.use_temporal_coherence,
                                           use_proportionality=flags.use_proportionality,
+                                          use_causality=flags.use_causality,
                                           value_lambda=flags.value_lambda,
                                           pixel_change_lambda=flags.pixel_change_lambda,
                                           temporal_coherence_lambda=flags.temporal_coherence_lambda,
-                                          proportionality_lambda=flags.proportionality_lambda)
+                                          proportionality_lambda=flags.proportionality_lambda,
+                                          causality_lambda=flags.causality_lambda)
         logger.debug("done loading global model")
         learning_rate_input = tf.placeholder("float")
         
@@ -206,10 +208,12 @@ class Application(object):
                                                 flags.use_reward_prediction,
                                                 flags.use_temporal_coherence,
                                                 flags.use_proportionality,
+                                                flags.use_causality,
                                                 flags.value_lambda,
                                                 flags.pixel_change_lambda,
                                                 flags.temporal_coherence_lambda,
                                                 flags.proportionality_lambda,
+                                                flags.causality_lambda,
                                                 flags.aux_initial_learning_rate,
                                                 learning_rate_input,
                                                 grad_applier,
@@ -339,6 +343,10 @@ class Application(object):
             self.prop_loss = tf.placeholder(tf.float32)
             self.summary_aux.append(self.prop_loss)
             aux_losses.append(tf.summary.scalar("aux/prop_loss", self.prop_loss))
+        if flags.use_causality:
+            self.caus_loss = tf.placeholder(tf.float32)
+            self.summary_aux.append(self.caus_loss)
+            aux_losses.append(tf.summary.scalar("aux/caus_loss", self.caus_loss))
         
         # append entropy and gradient last
         self.summary_aux.append(self.aux_entropy)

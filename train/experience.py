@@ -116,8 +116,8 @@ class Experience(object):
         break
     #logger.debug("start_pos:{}".format(start_pos))
     #logger.debug("seq1 length:{}".format(len(seq1)))
-    # get starting point for seq2 search (at least 100 steps further or an episode further)
-    search_start_2 = start_pos+i+1
+    # get starting point for seq2 search (at least 100 steps further)
+    search_start_2 = start_pos+i+100
     #logger.debug("search_start_2:{}".format(search_start_2))
     start_2 = None
     for k in range(100):

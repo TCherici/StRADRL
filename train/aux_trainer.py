@@ -35,10 +35,12 @@ class AuxTrainer(object):
                 use_reward_prediction,
                 use_temporal_coherence,
                 use_proportionality,
+                use_causality,
                 value_lambda,
                 pixel_change_lambda,
                 temporal_coherence_lambda,
                 proportionality_lambda,
+                causality_lambda,
                 initial_learning_rate,
                 learning_rate_input,
                 grad_applier,
@@ -60,6 +62,7 @@ class AuxTrainer(object):
         self.use_reward_prediction = use_reward_prediction  
         self.use_temporal_coherence = use_temporal_coherence
         self.use_proportionality = use_proportionality
+        self.use_causality = use_causality
         self.learning_rate_input = learning_rate_input
         self.env_type = env_type
         self.env_name = env_name
@@ -86,10 +89,12 @@ class AuxTrainer(object):
                                          use_reward_prediction=use_reward_prediction,
                                          use_temporal_coherence=use_temporal_coherence,
                                          use_proportionality=use_proportionality,
+                                         use_causality=use_causality,
                                          value_lambda=value_lambda,
                                          pixel_change_lambda=pixel_change_lambda,
                                          temporal_coherence_lambda=temporal_coherence_lambda,
                                          proportionality_lambda=proportionality_lambda,
+                                         causality_lambda=causality_lambda,
                                          for_display=False,
                                          use_base=use_base)
                                          
@@ -121,6 +126,8 @@ class AuxTrainer(object):
             self.aux_losses.append(self.local_network.tc_loss)
         if self.use_proportionality:
             self.aux_losses.append(self.local_network.prop_loss)
+        if self.use_causality:
+            self.aux_losses.append(self.local_network.caus_loss)
        
         
     def _anneal_learning_rate(self, global_time_step):
@@ -272,41 +279,31 @@ class AuxTrainer(object):
         batch_rp_c.append(rp_c)
         return batch_rp_si, batch_rp_c
         
-    def _process_tc(self):
-        # [temporal coherence]
-        tc_experience_frames = self.experience.sample_sequence(self.local_t_max+1)
-        # Revese sequence to calculate from the last
-        batch_tc_input1 = []
-        batch_tc_input2 = []
-        for frame in range(len(tc_experience_frames)-1):
-            batch_tc_input1.append(tc_experience_frames[frame].state)
-            batch_tc_input2.append(tc_experience_frames[frame+1].state)
-        return batch_tc_input1, batch_tc_input2
         
-    def _process_prop(self):
-        # [proportionality]
-        prop_frames1, prop_frames2 = self.experience.sample_b2b_seq_recursive(self.local_t_max+1)
-        b_prop_inp1_1 = []
-        b_prop_inp1_2 = []
-        b_prop_inp2_1 = []
-        b_prop_inp2_2 = []
+    def _process_robotics(self):
+        # [proportionality, causality and repeatability]
+        frames1, frames2 = self.experience.sample_b2b_seq_recursive(self.local_t_max+1)
+        b_inp1_1 = []
+        b_inp1_2 = []
+        b_inp2_1 = []
+        b_inp2_2 = []
         actioncheck = []
         rewardcheck = []
-        for frame in range(len(prop_frames1)-1):
-            b_prop_inp1_1.append(prop_frames1[frame].state)
-            b_prop_inp1_2.append(prop_frames1[frame+1].state)
-            b_prop_inp2_1.append(prop_frames2[frame].state)
-            b_prop_inp2_2.append(prop_frames2[frame+1].state)
-            if np.argmax(prop_frames1[frame].action) == np.argmax(prop_frames2[frame].action):
+        for frame in range(len(frames1)-1):
+            b_inp1_1.append(frames1[frame].state)
+            b_inp1_2.append(frames1[frame+1].state)
+            b_inp2_1.append(frames2[frame].state)
+            b_inp2_2.append(frames2[frame+1].state)
+            if np.argmax(frames1[frame].action) == np.argmax(frames2[frame].action):
                 actioncheck.append(1)
             else:
                 actioncheck.append(0)
-            if prop_frames1[frame].reward == prop_frames2[frame].reward:
+            if frames1[frame].reward == frames2[frame].reward:
                 rewardcheck.append(0)
             else:
                 rewardcheck.append(1)
         #logger.debug(actioncheck)
-        return b_prop_inp1_1,b_prop_inp1_2,b_prop_inp2_1,b_prop_inp2_2,actioncheck,rewardcheck
+        return b_inp1_1,b_inp1_2,b_inp2_1,b_inp2_2,actioncheck,rewardcheck
 
     def process(self, sess, global_t, aux_t, summary_writer, summary_op_aux, summary_aux):
         sess.run(self.sync)
@@ -374,28 +371,39 @@ class AuxTrainer(object):
             }
             feed_dict.update(rp_feed_dict)
         
-        # [Temporal coherence]
-        if self.use_temporal_coherence:
-            batch_tc_input1, batch_tc_input2 = self._process_tc()
-            tc_feed_dict = {
-                self.local_network.tc_input1: np.asarray(batch_tc_input1),
-                self.local_network.tc_input2: np.asarray(batch_tc_input2)
-            }
+        # [Robotic Priors]
+        if self.use_temporal_coherence or self.use_proportionality or self.use_causality:
+            bri11, bri12, bri21, bri22, sameact, diffrew = self._process_robotics()
             
+        #logger.debug("sameact:{}".format(sameact))
+        #logger.debug("diffrew:{}".format(diffrew))
+                
+        if self.use_temporal_coherence:        
+            tc_feed_dict = {
+                self.local_network.tc_input1: np.asarray(bri11),
+                self.local_network.tc_input2: np.asarray(bri12)
+            }
             feed_dict.update(tc_feed_dict)
         
-        # [Proportionality]
         if self.use_proportionality:
-            bpi11, bpi12, bpi21, bpi22, sameact, diffrew = self._process_prop()
             prop_feed_dict = {
-                self.local_network.prop_input1_1: np.asarray(bpi11),
-                self.local_network.prop_input1_2: np.asarray(bpi12),
-                self.local_network.prop_input2_1: np.asarray(bpi21),
-                self.local_network.prop_input2_2: np.asarray(bpi22),
-                self.local_network.actioncheck: np.asarray(sameact)                
+                self.local_network.prop_input1_1: np.asarray(bri11),
+                self.local_network.prop_input1_2: np.asarray(bri12),
+                self.local_network.prop_input2_1: np.asarray(bri21),
+                self.local_network.prop_input2_2: np.asarray(bri22),
+                self.local_network.prop_actioncheck: np.asarray(sameact)
             }
-            
             feed_dict.update(prop_feed_dict)
+            
+        if self.use_causality:
+            caus_feed_dict = {
+                self.local_network.caus_input1: np.asarray(bri11),
+                self.local_network.caus_input2: np.asarray(bri21),
+                self.local_network.caus_actioncheck: np.asarray(sameact),
+                self.local_network.caus_rewardcheck: np.asarray(diffrew)
+            }
+            feed_dict.update(caus_feed_dict)
+
         
         # Calculate gradients and copy them to global netowrk.
         [_, grad], losses, entropy = sess.run([self.apply_gradients, self.aux_losses, self.local_network.entropy], feed_dict=feed_dict )

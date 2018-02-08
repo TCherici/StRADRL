@@ -12,7 +12,7 @@ def get_options(option_type):
     'training' or 'diplay' or 'visualize'
   """    
   # name
-  tf.app.flags.DEFINE_string("training_name","aux_test_nothing","name of next training in log")
+  tf.app.flags.DEFINE_string("training_name","aux_test_causv1","name of next training in log")
     
   # Common
   tf.app.flags.DEFINE_string("env_type", "gym", "environment type (lab or gym or maze)")
@@ -24,7 +24,8 @@ def get_options(option_type):
   tf.app.flags.DEFINE_boolean("use_value_replay", False, "whether to use value function replay")
   tf.app.flags.DEFINE_boolean("use_reward_prediction", False, "whether to use reward prediction")
   tf.app.flags.DEFINE_boolean("use_temporal_coherence", False, "whether to use temporal coherence")
-  tf.app.flags.DEFINE_boolean("use_proportionality", False, "whether to use temporal coherence")
+  tf.app.flags.DEFINE_boolean("use_proportionality", False, "whether to use proportionality")
+  tf.app.flags.DEFINE_boolean("use_causality", True, "whether to use causality")
   tf.app.flags.DEFINE_string("checkpoint_dir", "/tmp/StRADRL/checkpoints", "checkpoint directory")
 
   # For training
@@ -51,6 +52,8 @@ def get_options(option_type):
     tf.app.flags.DEFINE_float("pixel_change_lambda", 0.0001, "pixel change lambda") # 0.05, 0.01 ~ 0.1 for lab, 0.0001 ~ 0.01 for gym
     tf.app.flags.DEFINE_float("temporal_coherence_lambda", 1., "temporal coherence lambda")
     tf.app.flags.DEFINE_float("proportionality_lambda", 100., "proportionality lambda")
+    tf.app.flags.DEFINE_float("causality_lambda", 1., "causality lambda")
+    
     tf.app.flags.DEFINE_integer("experience_history_size", 100000, "experience replay buffer size")
     
     # queuer

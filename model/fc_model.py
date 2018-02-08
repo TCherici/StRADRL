@@ -42,10 +42,12 @@ class UnrealModel(object):
                 use_reward_prediction=False,
                 use_temporal_coherence=False,
                 use_proportionality=False,
+                use_causality=False,
                 value_lambda=0.5,
                 pixel_change_lambda=0.,
                 temporal_coherence_lambda=0.,
                 proportionality_lambda=0.,
+                causality_lambda=0.,
                 for_display=False,
                 use_base=True):
         self._device = device
@@ -58,10 +60,12 @@ class UnrealModel(object):
         self._use_reward_prediction = use_reward_prediction
         self._use_temporal_coherence = use_temporal_coherence
         self._use_proportionality = use_proportionality
+        self._use_causality = use_causality
         self._use_base = use_base
         self._pixel_change_lambda = pixel_change_lambda
         self._temporal_coherence_lambda = temporal_coherence_lambda
         self._proportionality_lambda = proportionality_lambda
+        self._causality_lambda = causality_lambda
         self._value_lambda = value_lambda
         self._entropy_beta = entropy_beta
         self.reuse_conv = False
@@ -109,6 +113,10 @@ class UnrealModel(object):
             # [Proportionality network]    
             if self._use_proportionality:
                 self._create_prop_network()
+                
+            # [Causality network]    
+            if self._use_causality:
+                self._create_caus_network()
             
             self.reset_state()
 
@@ -258,7 +266,7 @@ class UnrealModel(object):
         self.prop_input2_1 = tf.placeholder("float", self.input_shape, name="prop_input2_1")
         self.prop_input2_2 = tf.placeholder("float", self.input_shape, name="prop_input2_1")
         # Boolean vector check for if actions 1 and 2 are equal
-        self.actioncheck = tf.placeholder("float", [None,], name="prop_actioncheck")
+        self.prop_actioncheck = tf.placeholder("float", [None,], name="prop_actioncheck")
 
         # get fc outputs (our internal state s)
         prop_output1_1 = self._fc_layers(self.prop_input1_1, reuse=self.reuse_lstm)
@@ -268,7 +276,26 @@ class UnrealModel(object):
         
         s1 = tf.reduce_mean(tf.abs(prop_output1_2-prop_output1_1),axis=1)
         s2 = tf.reduce_mean(tf.abs(prop_output2_2-prop_output2_1),axis=1)
-        self.prop_q = tf.reduce_mean(tf.square(s2-s1)*self.actioncheck)
+        statediff = tf.square(s2-s1)
+        
+        self.prop_q = tf.reduce_mean(statediff*self.prop_actioncheck)
+        
+    def _create_caus_network(self):
+        # Observations (input)
+        self.caus_input1 = tf.placeholder("float", self.input_shape, name="caus_input1")
+        self.caus_input2 = tf.placeholder("float", self.input_shape, name="caus_input2")
+        # Boolean vector check for if actions 1 and 2 are equal
+        self.caus_actioncheck = tf.placeholder("float", [None,], name="caus_actioncheck")
+        # Boolean vector check for if reward 1 and 2 are different
+        self.caus_rewardcheck = tf.placeholder("float", [None,], name="caus_rewardcheck")
+        
+        caus_out1 = self._fc_layers(self.caus_input1, reuse=self.reuse_lstm)
+        caus_out2 = self._fc_layers(self.caus_input2, reuse=self.reuse_lstm)
+        
+        state_distance = -tf.exp(tf.reduce_mean(tf.square(caus_out2-caus_out1),axis=1))
+        
+        self.caus_q = tf.reduce_mean(state_distance*self.caus_actioncheck*self.caus_rewardcheck)
+        
 
     def _base_loss(self):
         # [base A3C]
@@ -340,6 +367,11 @@ class UnrealModel(object):
         # temporal coherence loss
         prop_loss = self._proportionality_lambda * self.prop_q
         return prop_loss
+        
+    def _caus_loss(self):
+        # temporal coherence loss
+        caus_loss = self._causality_lambda * self.caus_q
+        return caus_loss
 
     def prepare_loss(self):
         with tf.device(self._device):
@@ -370,6 +402,10 @@ class UnrealModel(object):
             if self._use_proportionality:
                 self.prop_loss = self._prop_loss()
                 loss = loss + self.prop_loss
+                
+            if self._use_causality:
+                self.caus_loss = self._caus_loss()
+                loss = loss + self.caus_loss
             
             self.total_loss = loss
 
