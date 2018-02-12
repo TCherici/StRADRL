@@ -9,13 +9,14 @@ import logging
 
 logger = logging.getLogger('StRADRL.model')
 
-SEED = 3000#1337
+SEED = 4444#3000
 
 # weight initialization based on muupan's code
 # https://github.com/muupan/async-rl/blob/master/a3c_ale.py
 def fc_initializer(input_channels, dtype=tf.float32):
     def _initializer(shape, dtype=dtype, partition_info=None):
-        d = 1.0 / np.sqrt(input_channels)
+        #d = 1.0 / np.sqrt(input_channels)
+        d = np.sqrt(6/input_channels)
         return tf.random_uniform(shape, minval=-d, maxval=d, seed=SEED)
     return _initializer
 
@@ -162,7 +163,7 @@ class UnrealModel(object):
         #                          self.base_initial_lstm_state,
         #                          reuse=self.reuse_lstm)
 
-        self.base_pi, self.base_pi_log = self._base_policy_layer(self.base_fc_outputs, reuse=self.reuse_policy) # policy output
+        self.base_pi, self.base_pi_log, self.base_pi_linear = self._base_policy_layer(self.base_fc_outputs, reuse=self.reuse_policy) # policy output
         self.base_v  = self._base_value_layer(self.base_fc_outputs, reuse=self.reuse_value)  # value output
 
     def _fc_layers(self, state_input, reuse=False):
@@ -200,7 +201,7 @@ class UnrealModel(object):
             # set reuse to True to make aux tasks reuse the variables
             self.reuse_policy = True
             
-            return base_pi, base_pi_log
+            return base_pi, base_pi_log, base_pi_linear
 
 
     def _base_value_layer(self, lstm_outputs, reuse=False):
@@ -238,18 +239,20 @@ class UnrealModel(object):
 
     
     def _create_rp_network(self):
-        self.rp_input = tf.placeholder("float", [3, 84, 84, self._ch_num])
-
+        self.rp_input = tf.placeholder("float", self.input_shape)
+        """
         # RP conv layers
         rp_conv_output = self._base_conv_layers(self.rp_input, reuse=self.reuse_conv)
         rp_conv_output_reshaped = tf.reshape(rp_conv_output, [1,9*9*32*3])
+        """
+        rp_fc_output = self._fc_layers(self.rp_input, reuse=self.reuse_lstm)
         
         with tf.variable_scope("rp_fc") as scope:
             # Weights
-            W_fc1, b_fc1 = self._fc_variable([9*9*32*3, 3], "rp_fc1")
+            W_fc1, b_fc1 = self._fc_variable([64, 3], "rp_fc1")
 
         # Reward prediction class output. (zero, positive, negative)
-        self.rp_c = tf.nn.softmax(tf.matmul(rp_conv_output_reshaped, W_fc1) + b_fc1)
+        self.rp_c = tf.nn.softmax(tf.matmul(rp_fc_output, W_fc1) + b_fc1)
         # (1,3)
          
     # temporal coherence
@@ -335,7 +338,7 @@ class UnrealModel(object):
                
         base_a_ind = tf.argmax(self.base_a, axis=1)
         
-        neglogpac = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.base_pi, labels=base_a_ind)
+        neglogpac = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.base_pi_linear, labels=base_a_ind)
         # Policy loss (output)
         self.policy_loss = tf.reduce_mean(self.base_adv * neglogpac)
         
@@ -389,7 +392,7 @@ class UnrealModel(object):
     
     def _tc_loss(self):
         # temporal coherence loss
-        tc_loss = self._temporal_coherence_lambda * self.tc_q
+        tc_loss = - self._temporal_coherence_lambda * self.tc_q
         return tc_loss
     
     def _prop_loss(self):

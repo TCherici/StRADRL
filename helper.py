@@ -18,8 +18,13 @@ def logger_init(log_dir, id, loglevel='info', redirect_tf=True):
     print("full log path:" + full_log_path)
     filehandler = logging.FileHandler(full_log_path)
     streamhandler = logging.StreamHandler()
+    
+    # deactivated message because GYM environment duplicates it
     f = logging.Formatter("%(asctime)s - %(levelname)s - %(threadName)s:%(name)s:%(lineno)s - %(message)s",
                           "%H:%M:%S")
+    """
+    f = logging.Formatter("%(levelname)s - %(threadName)s:%(name)s:%(lineno)s")
+    """
     filehandler.setFormatter(f)
     streamhandler.setFormatter(f)
     logger.addHandler(filehandler)

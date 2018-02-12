@@ -1,0 +1,7 @@
+
+- Why is the value loss not converging quickly if every step has reward 1 fixed?
+
+- what is the point of stacking rollouts? base_trainer line118
+
+- Is the generalized advantage estimation good for discrete environments? base_trainer line 27
+

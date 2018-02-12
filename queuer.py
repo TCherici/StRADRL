@@ -132,8 +132,8 @@ def env_runner(env, sess, policy, num_local_steps, env_max_steps, action_freq, e
             
             #@TODO decide if argmax or probability, if latter fix experience replay selection
             #chosenaction = boltzmann(pi)
-            chosenaction = eps_greedy(pi, epsilon=0.1)
-            #chosenaction = np.argmax(pi)
+            #chosenaction = eps_greedy(pi, epsilon=0.1)
+            chosenaction = np.argmax(pi)
             action = onehot(chosenaction, len(pi), dtype="int32")
             
             state, reward, terminal, pixel_change = env.process(action)

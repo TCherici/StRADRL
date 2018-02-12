@@ -14,12 +14,12 @@ class ExperienceFrame(object):
   def __init__(self, state, reward, action, terminal, features, pixel_change, last_action, last_reward):
     self.state = state
     self.action = action # (Taken action with the 'state')
-    self.reward = np.clip(reward, -1, 1) # Received reward with the 'state'. (Clipped)
+    self.reward = reward # Received reward with the 'state'.
     self.terminal = terminal # (Whether terminated when 'state' was inputted)
     self.features = features # LSTM C and H memory states to be used to start
     self.pixel_change = pixel_change
     self.last_action = last_action # (After this last action was taken, agent move to the 'state')
-    self.last_reward = np.clip(last_reward, -1, 1) # (After this last reward was received, agent move to the 'state') (Clipped)
+    self.last_reward = last_reward# (After this last reward was received, agent move to the 'state') (Clipped)
 
   def get_last_action_reward(self, action_size):
     """
@@ -105,7 +105,7 @@ class Experience(object):
     
   def sample_b2b_sequence(self, sequence_size):
     start_pos = np.random.randint(0, len(self._frames) - sequence_size -1)
-    if self._frames[start_pos].terminal:
+    while self._frames[start_pos].terminal or self._frames[start_pos+1].terminal:
       start_pos += 1
       
     seq1 = []
@@ -146,7 +146,6 @@ class Experience(object):
         assert len(seq1)==len(seq2)
         return seq1, seq2
     # else is run after 10 attempts to find a starting point for the second sequence
-    
     raise TypeError("Couldn't find second start point")
         
   def sample_b2b_seq_recursive(self, sequence_size):

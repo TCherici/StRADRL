@@ -12,7 +12,7 @@ def get_options(option_type):
     'training' or 'diplay' or 'visualize'
   """    
   # name
-  tf.app.flags.DEFINE_string("training_name","repv1","name of next training in log")
+  tf.app.flags.DEFINE_string("training_name","tc_v1","name of next training in log")
 
     
   # Common
@@ -24,23 +24,23 @@ def get_options(option_type):
   tf.app.flags.DEFINE_boolean("use_pixel_change", False, "whether to use pixel change")
   tf.app.flags.DEFINE_boolean("use_value_replay", False, "whether to use value function replay")
   tf.app.flags.DEFINE_boolean("use_reward_prediction", False, "whether to use reward prediction")
-  tf.app.flags.DEFINE_boolean("use_temporal_coherence", False, "whether to use temporal coherence")
+  tf.app.flags.DEFINE_boolean("use_temporal_coherence", True, "whether to use temporal coherence")
   tf.app.flags.DEFINE_boolean("use_proportionality", False, "whether to use proportionality")
   tf.app.flags.DEFINE_boolean("use_causality", False, "whether to use causality")
-  tf.app.flags.DEFINE_boolean("use_repeatability", True, "whether to use repeatability")
+  tf.app.flags.DEFINE_boolean("use_repeatability", False, "whether to use repeatability")
   tf.app.flags.DEFINE_string("checkpoint_dir", "/tmp/StRADRL/checkpoints", "checkpoint directory")
 
   # For training
   if option_type == 'training':
     tf.app.flags.DEFINE_string("temp_dir", "/tmp/StRADRL/tensorboard/", "base directory for tensorboard")
     tf.app.flags.DEFINE_string("log_dir", "/tmp/StRADRL/log/", "base directory for logs")
-    tf.app.flags.DEFINE_integer("max_time_step", 10**8, "max time steps")
+    tf.app.flags.DEFINE_integer("max_time_step", 10**6, "max time steps")
     tf.app.flags.DEFINE_integer("save_interval_step", 10**4, "saving interval steps")
     tf.app.flags.DEFINE_boolean("grad_norm_clip", 40.0, "gradient norm clipping")
 
     #base
-    tf.app.flags.DEFINE_float("initial_learning_rate", 1e-4, "learning rate")
-    tf.app.flags.DEFINE_float("gamma", 0.97, "discount factor for rewards")
+    tf.app.flags.DEFINE_float("initial_learning_rate", 1e-3, "learning rate")
+    tf.app.flags.DEFINE_float("gamma", 0.99, "discount factor for rewards")
     tf.app.flags.DEFINE_float("entropy_beta", 0.01, "entropy regurarlization constant")
     tf.app.flags.DEFINE_float("value_lambda", 0.5, "value ratio for base loss")
     tf.app.flags.DEFINE_float("base_lambda", 0.97, "generalized adv. est. lamba for short-long sight")
@@ -48,7 +48,7 @@ def get_options(option_type):
     
     # auxiliary
     tf.app.flags.DEFINE_integer("parallel_size", 1, "parallel thread size")
-    tf.app.flags.DEFINE_float("aux_initial_learning_rate", 1e-4, "learning rate")
+    tf.app.flags.DEFINE_float("aux_initial_learning_rate", 1e-3, "learning rate")
     tf.app.flags.DEFINE_float("aux_lambda", 0.0, "generalized adv. est. lamba for short-long sight (aux)")
     tf.app.flags.DEFINE_float("gamma_pc", 0.9, "discount factor for pixel control")
     tf.app.flags.DEFINE_float("pixel_change_lambda", 0.0001, "pixel change lambda") # 0.05, 0.01 ~ 0.1 for lab, 0.0001 ~ 0.01 for gym

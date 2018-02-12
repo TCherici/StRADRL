@@ -19,7 +19,7 @@ from train.experience import Experience, ExperienceFrame
 
 logger = logging.getLogger("StRADRL.base_trainer")
 
-LOG_INTERVAL = 1000
+LOG_INTERVAL = 2000
 PERFORMANCE_LOG_INTERVAL = 10000
 
 Batch = namedtuple("Batch", ["si", "a", "a_r", "adv", "r", "terminal", "features", "pc"])
@@ -161,7 +161,7 @@ class BaseTrainer(object):
                 terminal = True
             else:
                 terminal = False
-            frame = ExperienceFrame(self.last_state, reward, action, terminal, features, pixel_change,
+            frame = ExperienceFrame(state, reward, action, terminal, features, pixel_change,
 
                             self.last_action, self.last_reward)
             self.experience.add_frame(frame)
@@ -190,17 +190,7 @@ class BaseTrainer(object):
         batch = process_rollout(rollout, gamma=0.99, lambda_=base_lambda)
         self.local_t += len(batch.si)
 
-        
-        if self.local_t > self.next_performance_t:
-            self._print_log(global_t)
-            self.next_performance_t += PERFORMANCE_LOG_INTERVAL
-                
-        if self.local_t >= self.next_log_t:
-            logger.info("localtime={}".format(self.local_t))
-            logger.info("action={}".format(self.last_action))
-            logger.info("V={}".format(batch.r[-1]))
-            self.next_log_t += LOG_INTERVAL
-        
+
         #logger.debug("si:{}".format(batch.si.shape))
         feed_dict = {
             self.local_network.base_input: batch.si,
@@ -215,12 +205,13 @@ class BaseTrainer(object):
         
         
         # Calculate gradients and copy them to global network.
-        [_, grad], policy_loss, value_loss, entropy, baseinput = sess.run(
+        [_, grad], policy_loss, value_loss, entropy, baseinput, policy = sess.run(
                                               [self.apply_gradients,
                                               self.local_network.policy_loss,
                                               self.local_network.value_loss,
                                               self.local_network.entropy, 
-                                              self.local_network.base_input],
+                                              self.local_network.base_input,
+                                              self.local_network.base_pi],
                                      feed_dict=feed_dict )
         self.ep_l += batch.si.shape[0]
         self.ep_ploss += policy_loss
@@ -242,6 +233,18 @@ class BaseTrainer(object):
                                                           #summary_values[7]: laststate})
             summary_writer.add_summary(summary_str, global_t)
             summary_writer.flush()
+                    
+            if self.local_t > self.next_performance_t:
+                self._print_log(global_t)
+                self.next_performance_t += PERFORMANCE_LOG_INTERVAL
+                    
+            if self.local_t >= self.next_log_t:
+                logger.info("localtime={}".format(self.local_t))
+                logger.info("action={}".format(self.last_action))
+                logger.info("policy={}".format(policy[-1]))
+                logger.info("V={}".format(batch.r[-1]))
+                self.next_log_t += LOG_INTERVAL
+            
             #try:
             #sess.run(self.sync)
             #except Exception:

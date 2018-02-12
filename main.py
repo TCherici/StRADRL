@@ -25,12 +25,12 @@ from train.rmsprop_applier import RMSPropApplier
 from train.base_trainer import BaseTrainer
 from train.aux_trainer import AuxTrainer
 from queuer import RunnerThread
-from options import get_options
+from settings.options import get_options
 
 # get command line args
 flags = get_options("training")
 # setup logger
-logger = logging.getLogger('StRADRL.newmain')
+logger = logging.getLogger('StRADRL.main')
 
 
 RUN_ID = generate_id()
@@ -72,8 +72,8 @@ class Application(object):
                 break
             if self.global_t > self.next_save_steps:
                 # Save checkpoint
-                logger.debug("Steps:{}".format(self.global_t))
-                logger.debug(self.next_save_steps)
+                logger.debug("Saving at steps:{}".format(self.global_t))
+                #logger.debug(self.next_save_steps)
                 
                 self.save()
             
@@ -85,6 +85,7 @@ class Application(object):
                                           flags.base_lambda)
             self.global_t += diff_global_t
         logger.warn("exiting training!")
+        self.terminate_requested = True
         self.environment.stop()
         #sys.exit(0)
         time.sleep(1)
@@ -100,6 +101,7 @@ class Application(object):
                 continue
             if self.stop_requested:
                 continue
+                logger.warn("aux stop requested")
             if self.terminate_requested:
                 break
             if self.global_t > flags.max_time_step:
@@ -112,7 +114,8 @@ class Application(object):
                                         self.summary_op_aux,
                                         self.summary_aux)
             self.aux_t += diff_aux_t
-            #logger.debug("aux_t:{}".format(self.aux_t))
+            
+        logger.warn("!!! stopping aux at aux_t:{}".format(self.aux_t))
             
             
     def run(self):
@@ -289,7 +292,7 @@ class Application(object):
         logger.debug(threading.enumerate())
 
         logger.info('Press Ctrl+C to stop')
-        #signal.pause()
+        signal.pause()
         
     
     def init_tensorboard(self):
@@ -388,11 +391,11 @@ class Application(object):
         wall_t_fname = flags.checkpoint_dir + '/' + 'wall_t.' + str(self.global_t)
         with open(wall_t_fname, 'w') as f:
             f.write(str(wall_t))
-        logger.info('Start saving.')
+        #logger.info('Start saving.')
         self.saver.save(self.sess,
                     flags.checkpoint_dir + '/' + 'checkpoint',
                     global_step = self.global_t)
-        logger.info('End saving.')
+        #logger.info('End saving.')
     
         self.stop_requested = False
         self.next_save_steps += flags.save_interval_step

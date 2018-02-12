@@ -310,6 +310,7 @@ class AuxTrainer(object):
             else:
                 rewardcheck.append(1)
         #logger.debug(actioncheck)
+        
         return b_inp1_1,b_inp1_2,b_inp2_1,b_inp2_2,actioncheck,rewardcheck
 
     def process(self, sess, global_t, aux_t, summary_writer, summary_op_aux, summary_aux):

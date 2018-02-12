@@ -14,6 +14,7 @@ from environment import environment
 COMMAND_RESET     = 0
 COMMAND_ACTION    = 1
 COMMAND_TERMINATE = 2
+COMMAND_RENDER    = 3
 
 logger = logging.getLogger("StRADRL.gym_environment")
 
@@ -50,6 +51,8 @@ def worker(conn, env_name):
       conn.send([state, reward, terminal])
     elif command == COMMAND_TERMINATE:
       break
+    elif command == COMMAND_RENDER:
+        env.render()
     else:
       print("bad command: {}".format(command))
   env.close()
@@ -97,12 +100,19 @@ class GymEnvironment(environment.Environment):
     ret = self.conn.recv()
     self.conn.close()
     self.proc.join()
-    print("gym environment stopped")
+    logger.warn("gym environment stopped")
 
   def process(self, action_oh):
     action = np.argmax(action_oh)
     self.conn.send([COMMAND_ACTION, action])
-    state, reward, terminal = self.conn.recv()
+    try:
+        state, reward, terminal = self.conn.recv()
+    except TypeError:
+        logger.warn("!! Received single int value, environment probably terminated !!")
+        logger.warn("Closing now")
+        self.conn.close()
+        self.proc.join()
+        logger.warn("gym environment stopped")
     
     #pixel_change = self._calc_pixel_change(state, self.last_state)
     pixel_change = []
@@ -110,3 +120,6 @@ class GymEnvironment(environment.Environment):
     self.last_action = action
     self.last_reward = reward
     return state, reward, terminal, pixel_change
+    
+  def render(self):
+    self.conn.send([COMMAND_RENDER, 0])
