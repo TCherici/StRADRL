@@ -205,13 +205,14 @@ class BaseTrainer(object):
         
         
         # Calculate gradients and copy them to global network.
-        [_, grad], policy_loss, value_loss, entropy, baseinput, policy = sess.run(
+        [_, grad], policy_loss, value_loss, entropy, baseinput, policy, value = sess.run(
                                               [self.apply_gradients,
                                               self.local_network.policy_loss,
                                               self.local_network.value_loss,
                                               self.local_network.entropy, 
                                               self.local_network.base_input,
-                                              self.local_network.base_pi],
+                                              self.local_network.base_pi,
+                                              self.local_network.base_v],
                                      feed_dict=feed_dict )
         self.ep_l += batch.si.shape[0]
         self.ep_ploss += policy_loss
@@ -242,7 +243,8 @@ class BaseTrainer(object):
                 logger.info("localtime={}".format(self.local_t))
                 logger.info("action={}".format(self.last_action))
                 logger.info("policy={}".format(policy[-1]))
-                logger.info("V={}".format(batch.r[-1]))
+                logger.info("V={}".format(np.mean(value)))
+                logger.info("ep score={}".format(total_ep_reward))
                 self.next_log_t += LOG_INTERVAL
             
             #try:

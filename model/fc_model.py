@@ -16,8 +16,8 @@ SEED = 4444#3000
 def fc_initializer(input_channels, dtype=tf.float32):
     def _initializer(shape, dtype=dtype, partition_info=None):
         #d = 1.0 / np.sqrt(input_channels)
-        d = np.sqrt(6/input_channels)
-        return tf.random_uniform(shape, minval=-d, maxval=d, seed=SEED)
+        d = np.sqrt(1/input_channels)
+        return tf.random_uniform(shape, minval=-d, maxval=d)#, seed=SEED)
     return _initializer
 
 
@@ -392,7 +392,7 @@ class UnrealModel(object):
     
     def _tc_loss(self):
         # temporal coherence loss
-        tc_loss = - self._temporal_coherence_lambda * self.tc_q
+        tc_loss = self._temporal_coherence_lambda * self.tc_q
         return tc_loss
     
     def _prop_loss(self):

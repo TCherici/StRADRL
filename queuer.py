@@ -120,6 +120,7 @@ def env_runner(env, sess, policy, num_local_steps, env_max_steps, action_freq, e
     
     while True:
         itercount += 1
+        sess.run(syncfunc)
         terminal_end = False
         rollout = PartialRollout()
         for _ in range(num_local_steps):
@@ -132,8 +133,8 @@ def env_runner(env, sess, policy, num_local_steps, env_max_steps, action_freq, e
             
             #@TODO decide if argmax or probability, if latter fix experience replay selection
             #chosenaction = boltzmann(pi)
-            #chosenaction = eps_greedy(pi, epsilon=0.1)
-            chosenaction = np.argmax(pi)
+            chosenaction = eps_greedy(pi, epsilon=0.05)
+            #chosenaction = np.argmax(pi)
             action = onehot(chosenaction, len(pi), dtype="int32")
             
             state, reward, terminal, pixel_change = env.process(action)
@@ -163,7 +164,8 @@ def env_runner(env, sess, policy, num_local_steps, env_max_steps, action_freq, e
                 last_features = policy.get_initial_features()
                 #logger.info("Ep. finish. Tot rewards: %d. Length: %d" % (rewards, length))
                 if itercount % env_runner_sync == 0:
-                    sess.run(syncfunc)
+                    # moved sync to start of cycle
+                    assert True
                 length = 0
                 rewards = 0
                 break
