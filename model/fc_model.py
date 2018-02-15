@@ -174,8 +174,11 @@ class UnrealModel(object):
             W_fc_2, b_fc_2 = self._fc_variable([64, 64], "base_fc_2")
             #W_fc_3, b_fc_3 = self._fc_variable([256, 256], "base_fc_3")
             
-            out_fc_1 = tf.nn.relu(tf.matmul(state_input, W_fc_1) + b_fc_1)     
-            out_fc_2 = tf.nn.relu(tf.matmul(out_fc_1, W_fc_2) + b_fc_2)
+            #out_fc_1 = tf.nn.relu(tf.matmul(state_input, W_fc_1) + b_fc_1)     
+            #out_fc_2 = tf.nn.relu(tf.matmul(out_fc_1, W_fc_2) + b_fc_2)
+            
+            out_fc_1 = tf.nn.dropout(tf.nn.relu(tf.matmul(state_input, W_fc_1) + b_fc_1),0.5)     
+            out_fc_2 = tf.nn.dropout(tf.nn.relu(tf.matmul(out_fc_1, W_fc_2) + b_fc_2),0.5)
             #out_fc_3 = tf.nn.dropout(tf.nn.relu(tf.matmul(out_fc_2, W_fc_3) + b_fc_3),0.5)
             
             self.reuse_lstm = True # "borrowed lstm reuse check"
