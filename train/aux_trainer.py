@@ -22,97 +22,68 @@ logger = logging.getLogger("StRADRL.aux_trainer")
 # syncing at start of batch
 #SYNC_INTERVAL = 150
 LOG_INTERVAL = 1000
-
-Batch = namedtuple("Batch", ["si", "a", "a_r", "adv", "r", "terminal", "features"])#, "pc"])
+            
+Batch = namedtuple("Batch", ["si", "a", "rewards", "adv", "discrewards", "terminal"])
+    
 
 class AuxTrainer(object):
     def __init__(self,
                 global_network,
                 thread_index,
-                use_base,
-                use_pixel_change,
-                use_value_replay,
-                use_reward_prediction,
-                use_temporal_coherence,
-                use_proportionality,
-                use_causality,
-                use_repeatability,
-                value_lambda,
-                pixel_change_lambda,
-                temporal_coherence_lambda,
-                proportionality_lambda,
-                causality_lambda,
-                repeatability_lambda,
-                initial_learning_rate,
                 learning_rate_input,
                 grad_applier,
-                aux_t,
-                env_type,
-                env_name,
-                entropy_beta,
-                local_t_max,
                 gamma,
-                aux_lambda,
-                gamma_pc,
                 experience,
                 max_global_time_step,
-                device):
+                device,
+                flags):
                 
-                
-        self.use_pixel_change = use_pixel_change   
-        self.use_value_replay = use_value_replay
-        self.use_reward_prediction = use_reward_prediction  
-        self.use_temporal_coherence = use_temporal_coherence
-        self.use_proportionality = use_proportionality
-        self.use_causality = use_causality
-        self.use_repeatability = use_repeatability
+        self.global_network = global_network
+        self.thread_index = thread_index
+        self.initial_learning_rate = flags.aux_initial_learning_rate
         self.learning_rate_input = learning_rate_input
-        self.env_type = env_type
-        self.env_name = env_name
-        self.entropy_beta = entropy_beta
+        self.env_type = flags.env_type
+        self.env_name = flags.env_name
+        self.local_t_max = flags.local_t_max
+        self.gamma = gamma
+        self.experience = experience
+        self.max_global_time_step = max_global_time_step
         self.local_t = 0
         self.next_sync_t = 0
         self.next_log_t = 0
-        self.local_t_max = local_t_max
-        self.gamma = gamma
-        self.aux_lambda = aux_lambda
-        self.gamma_pc = gamma_pc
-        self.experience = experience
-        self.max_global_time_step = max_global_time_step
-        self.action_size = Environment.get_action_size(env_type, env_name)
-        self.obs_size = Environment.get_obs_size(env_type, env_name)
-        self.thread_index = thread_index
+        self.action_size, self.is_discrete = Environment.get_action_size(self.env_type, self.env_name)
+        self.obs_size = Environment.get_obs_size(self.env_type, self.env_name)
         self.local_network = UnrealModel(self.action_size,
+                                         self.is_discrete,
                                          self.obs_size,
                                          self.thread_index,
-                                         self.entropy_beta,
+                                         flags.entropy_beta,
                                          device,
-                                         use_pixel_change=use_pixel_change,
-                                         use_value_replay=use_value_replay,
-                                         use_reward_prediction=use_reward_prediction,
-                                         use_temporal_coherence=use_temporal_coherence,
-                                         use_proportionality=use_proportionality,
-                                         use_causality=use_causality,
-                                         use_repeatability=use_repeatability,
-                                         value_lambda=value_lambda,
-                                         pixel_change_lambda=pixel_change_lambda,
-                                         temporal_coherence_lambda=temporal_coherence_lambda,
-                                         proportionality_lambda=proportionality_lambda,
-                                         causality_lambda=causality_lambda,
-                                         repeatability_lambda=repeatability_lambda,
-                                         for_display=False,
-                                         use_base=use_base)
+                                         use_base=flags.use_base,
+                                         value_lambda=flags.value_lambda,
+                                         use_pixel_change=flags.use_pixel_change,
+                                         pixel_change_lambda=flags.pixel_change_lambda,
+                                         use_value_replay=flags.use_value_replay,
+                                         use_reward_prediction=flags.use_reward_prediction,
+                                         use_temporal_coherence=flags.use_temporal_coherence,
+                                         temporal_coherence_lambda=flags.temporal_coherence_lambda,
+                                         use_proportionality=flags.use_proportionality,
+                                         proportionality_lambda=flags.proportionality_lambda,
+                                         use_causality=flags.use_causality,
+                                         causality_lambda=flags.causality_lambda,
+                                         use_repeatability=flags.use_repeatability,
+                                         repeatability_lambda=flags.repeatability_lambda,
+                                         for_display=False)
                                          
         self.local_network.prepare_loss()
-        self.global_network = global_network
-        
         #logger.debug("ln.total_loss:{}".format(self.local_network.total_loss))
         
         self.apply_gradients = grad_applier.minimize_local(self.local_network.total_loss,
                                                            self.global_network.get_vars(),
                                                            self.local_network.get_vars())
+
         self.sync = self.local_network.sync_from(self.global_network, name="aux_trainer_{}".format(self.thread_index))
-        self.initial_learning_rate = initial_learning_rate
+
         self.episode_reward = 0
         # trackers for the experience replay creation
         self.last_action = np.zeros(self.action_size)
@@ -121,19 +92,19 @@ class AuxTrainer(object):
         self.aux_losses = []
         self.aux_losses.append(self.local_network.policy_loss)
         self.aux_losses.append(self.local_network.value_loss)
-        if self.use_pixel_change:
+        if flags.use_pixel_change:
             self.aux_losses.append(self.local_network.pc_loss)
-        if self.use_value_replay:
+        if flags.use_value_replay:
             self.aux_losses.append(self.local_network.vr_loss)
-        if self.use_reward_prediction:
+        if flags.use_reward_prediction:
             self.aux_losses.append(self.local_network.rp_loss)
-        if self.use_temporal_coherence:
+        if flags.use_temporal_coherence:
             self.aux_losses.append(self.local_network.tc_loss)
-        if self.use_proportionality:
+        if flags.use_proportionality:
             self.aux_losses.append(self.local_network.prop_loss)
-        if self.use_causality:
+        if flags.use_causality:
             self.aux_losses.append(self.local_network.caus_loss)
-        if self.use_repeatability:
+        if flags.use_repeatability:
             self.aux_losses.append(self.local_network.rep_loss)
        
         
@@ -145,21 +116,15 @@ class AuxTrainer(object):
         
     def discount(self, x, gamma):
         return scipy.signal.lfilter([1], [1, -gamma], x[::-1], axis=0)[::-1]
-        
+
     def _process_base(self, sess, policy, gamma, lambda_=1.0):
         # base A3C from experience replay
         experience_frames = self.experience.sample_sequence(self.local_t_max+1)
         batch_si = []
         batch_a = []
         rewards = []
-        action_reward = []
-        batch_features = []
         values = []
         last_state = experience_frames[0].state
-        last_action_reward = experience_frames[0].concat_action_and_reward(experience_frames[0].action,
-                                                                        self.action_size,
-                                                                        experience_frames[0].reward)
-        policy.set_state(np.asarray(experience_frames[0].features).reshape([2,1,-1]))
             
         
         for frame in range(1,len(experience_frames)):
@@ -168,18 +133,14 @@ class AuxTrainer(object):
             batch_si.append(state)
             action = experience_frames[frame].action
             reward = experience_frames[frame].reward
-            a_r = experience_frames[frame].concat_action_and_reward(action, self.action_size, reward)
-            action_reward.append(a_r)
-            batch_a.append(a_r[:-1])
+            batch_a.append(action)
             rewards.append(reward)
-            _, value, features = policy.run_base_policy_and_value(sess, last_state, last_action_reward)
-            batch_features.append(features)
+            _, value = policy.run_base_policy_and_value(sess, last_state)
             values.append(value)
             last_state = state
-            last_action_reward = action_reward[-1]
 
         if not experience_frames[-1].terminal:
-           r = policy.run_base_value(sess, last_state, last_action_reward)
+           r = policy.run_base_value(sess, last_state)
         else:
            r = 0.
                 
@@ -191,11 +152,9 @@ class AuxTrainer(object):
         # https://arxiv.org/abs/1506.02438
         batch_adv = self.discount(delta_t, gamma * lambda_)
 
-        
-        start_features = []#batch_features[0]
 
-        return Batch(batch_si, batch_a, action_reward, batch_adv, batch_r, experience_frames[-1].terminal, start_features)
-        
+        return Batch(batch_si, batch_a, rewards, batch_adv, batch_r, experience_frames[-1].terminal)
+
     def _process_pc(self, sess):
         # [pixel change]
         # Sample 20+1 frame (+1 for last next state)
@@ -215,7 +174,7 @@ class AuxTrainer(object):
                                                  pc_experience_frames[0].get_last_action_reward(self.action_size))
 
         for frame in pc_experience_frames[1:]:
-            pc_R = frame.pixel_change + self.gamma_pc * pc_R
+            pc_R = frame.pixel_change + flags.gamma_pc * pc_R
             a = np.zeros([self.action_size])
             a[frame.action] = 1.0
             last_action_reward = frame.get_last_action_reward(self.action_size)
@@ -313,7 +272,7 @@ class AuxTrainer(object):
         
         return b_inp1_1,b_inp1_2,b_inp2_1,b_inp2_2,actioncheck,rewardcheck
 
-    def process(self, sess, global_t, aux_t, summary_writer, summary_op_aux, summary_aux):
+    def process(self, sess, global_t, aux_t, summary_writer, summary_op_aux, summary_aux, flags):
         sess.run(self.sync)
         cur_learning_rate = self._anneal_learning_rate(global_t)
         """
@@ -328,21 +287,19 @@ class AuxTrainer(object):
             #logger.debug("next_sync:{}".format(self.next_sync_t))
         """
 
-        batch = self._process_base(sess, self.local_network, self.gamma, self.aux_lambda)
+        batch = self._process_base(sess, self.local_network, self.gamma, flags.aux_lambda)
         
         feed_dict = {
                 self.local_network.base_input: batch.si,
-                self.local_network.base_last_action_reward_input: batch.a_r,
                 self.local_network.base_a: batch.a,
                 self.local_network.base_adv: batch.adv,
-                self.local_network.base_r: batch.r,
-                #self.local_network.base_initial_lstm_state: batch.features,
+                self.local_network.base_r: batch.discrewards,
                 # [common]
                 self.learning_rate_input: cur_learning_rate
         }
         
         # [Pixel change]
-        if self.use_pixel_change:
+        if flags.use_pixel_change:
             batch_pc_si, batch_pc_last_action_reward, batch_pc_a, batch_pc_R = self._process_pc(sess)
 
             pc_feed_dict = {
@@ -356,7 +313,7 @@ class AuxTrainer(object):
             feed_dict.update(pc_feed_dict)
 
         # [Value replay]
-        if self.use_value_replay:
+        if flags.use_value_replay:
             batch_vr_si, batch_vr_last_action_reward, batch_vr_R = self._process_vr(sess)
             
             vr_feed_dict = {
@@ -369,7 +326,7 @@ class AuxTrainer(object):
             feed_dict.update(vr_feed_dict)
 
         # [Reward prediction]
-        if self.use_reward_prediction:
+        if flags.use_reward_prediction:
             batch_rp_si, batch_rp_c = self._process_rp()
             rp_feed_dict = {
                 self.local_network.rp_input: batch_rp_si,
@@ -380,20 +337,20 @@ class AuxTrainer(object):
             feed_dict.update(rp_feed_dict)
         
         # [Robotic Priors]
-        if self.use_temporal_coherence or self.use_proportionality or self.use_causality or self.use_repeatability:
+        if flags.use_temporal_coherence or flags.use_proportionality or flags.use_causality or flags.use_repeatability:
             bri11, bri12, bri21, bri22, sameact, diffrew = self._process_robotics()
             
         #logger.debug("sameact:{}".format(sameact))
         #logger.debug("diffrew:{}".format(diffrew))
                 
-        if self.use_temporal_coherence:        
+        if flags.use_temporal_coherence:        
             tc_feed_dict = {
                 self.local_network.tc_input1: np.asarray(bri11),
                 self.local_network.tc_input2: np.asarray(bri12)
             }
             feed_dict.update(tc_feed_dict)
         
-        if self.use_proportionality:
+        if flags.use_proportionality:
             prop_feed_dict = {
                 self.local_network.prop_input1_1: np.asarray(bri11),
                 self.local_network.prop_input1_2: np.asarray(bri12),
@@ -403,7 +360,7 @@ class AuxTrainer(object):
             }
             feed_dict.update(prop_feed_dict)
             
-        if self.use_causality:
+        if flags.use_causality:
             caus_feed_dict = {
                 self.local_network.caus_input1: np.asarray(bri11),
                 self.local_network.caus_input2: np.asarray(bri21),
@@ -412,7 +369,7 @@ class AuxTrainer(object):
             }
             feed_dict.update(caus_feed_dict)
         
-        if self.use_repeatability:
+        if flags.use_repeatability:
             rep_feed_dict = {
                 self.local_network.rep_input1_1: np.asarray(bri11),
                 self.local_network.rep_input1_2: np.asarray(bri12),

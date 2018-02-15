@@ -11,33 +11,14 @@ from collections import deque
 logger = logging.getLogger("StRADRL.experience")
 
 class ExperienceFrame(object):
-  def __init__(self, state, reward, action, terminal, features, pixel_change, last_action, last_reward):
+  def __init__(self, state, reward, action, terminal, pixel_change, last_action, last_reward):
     self.state = state
     self.action = action # (Taken action with the 'state')
     self.reward = reward # Received reward with the 'state'.
     self.terminal = terminal # (Whether terminated when 'state' was inputted)
-    self.features = features # LSTM C and H memory states to be used to start
     self.pixel_change = pixel_change
     self.last_action = last_action # (After this last action was taken, agent move to the 'state')
-    self.last_reward = last_reward# (After this last reward was received, agent move to the 'state') (Clipped)
-
-  def get_last_action_reward(self, action_size):
-    """
-    Return one hot vectored last action + last reward.
-    """
-    return ExperienceFrame.concat_action_and_reward(self.last_action, action_size,
-                                                    self.last_reward)
-
-  @staticmethod
-  def concat_action_and_reward(action, action_size, reward):
-    """
-    Return one hot vectored action and reward.
-    """
-    action_reward = np.zeros([action_size+1])
-    action_reward[action] = 1.0
-    action_reward[-1] = float(reward)
-    return action_reward
-  
+    self.last_reward = last_reward# (After this last reward was received, agent move to the 'state')
 
 class Experience(object):
   def __init__(self, history_size):

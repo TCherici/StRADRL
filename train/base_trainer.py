@@ -22,7 +22,7 @@ logger = logging.getLogger("StRADRL.base_trainer")
 LOG_INTERVAL = 2000
 PERFORMANCE_LOG_INTERVAL = 10000
 
-Batch = namedtuple("Batch", ["si", "a", "a_r", "adv", "r", "terminal", "features", "pc"])
+Batch = namedtuple("Batch", ["si", "a", "rewards", "adv", "discrewards", "terminal", "pc"])
 
 def process_rollout(rollout, gamma, lambda_=1.0):
     """
@@ -30,20 +30,18 @@ def process_rollout(rollout, gamma, lambda_=1.0):
     """
     batch_si = np.asarray(rollout.states)
     batch_a = np.asarray(rollout.actions)
-    rewards = np.asarray(rollout.rewards)
-    action_reward = np.concatenate((batch_a,rewards[:,np.newaxis]), axis=1)
+    batch_reward = np.asarray(rollout.rewards)
     vpred_t = np.asarray(rollout.values + [rollout.r])
 
     rewards_plus_v = np.asarray(rollout.rewards + [rollout.r])
     batch_r = discount(rewards_plus_v, gamma)[:-1]
-    delta_t = rewards + gamma * vpred_t[1:] - vpred_t[:-1]
+    delta_t = batch_reward + gamma * vpred_t[1:] - vpred_t[:-1]
     # this formula for the advantage comes "Generalized Advantage Estimation":
     # https://arxiv.org/abs/1506.02438
     batch_adv = discount(delta_t, gamma * lambda_)
 
-    features = rollout.features
     batch_pc = np.asarray(rollout.pixel_changes)
-    return Batch(batch_si, batch_a, action_reward, batch_adv, batch_r, rollout.terminal, features, batch_pc)
+    return Batch(batch_si, batch_a, batch_reward, batch_adv, batch_r, rollout.terminal, batch_pc)
 
 def discount(x, gamma):
     return scipy.signal.lfilter([1], [1, -gamma], x[::-1], axis=0)[::-1]
@@ -69,10 +67,11 @@ class BaseTrainer(object):
         self.env_name = env_name
         self.gamma = gamma
         self.max_global_time_step = max_global_time_step
-        self.action_size = Environment.get_action_size(env_type, env_name)
+        self.action_size, self.is_discrete = Environment.get_action_size(env_type, env_name)
         self.obs_size = Environment.get_obs_size(env_type, env_name)
         self.global_network = global_network
         self.local_network = UnrealModel(self.action_size,
+                                         self.is_discrete,
                                          self.obs_size,
                                          1,
                                          entropy_beta,
@@ -151,18 +150,16 @@ class BaseTrainer(object):
         for k in range(len(batch.si)):
             state = batch.si[k]
             action = batch.a[k]#np.argmax(batch.a[k])
-            reward = batch.a_r[k][-1]
+            reward = batch.rewards[k]
 
             self.episode_reward += reward
-            features = batch.features[k]
             pixel_change = batch.pc[k]
             #logger.debug("k = {} of {} -- terminal = {}".format(k,len(batch.si), batch.terminal))
             if k == len(batch.si)-1 and batch.terminal:
                 terminal = True
             else:
                 terminal = False
-            frame = ExperienceFrame(state, reward, action, terminal, features, pixel_change,
-
+            frame = ExperienceFrame(state, reward, action, terminal, pixel_change,
                             self.last_action, self.last_reward)
             self.experience.add_frame(frame)
             self.last_state = state
@@ -194,30 +191,28 @@ class BaseTrainer(object):
         #logger.debug("si:{}".format(batch.si.shape))
         feed_dict = {
             self.local_network.base_input: batch.si,
-            self.local_network.base_last_action_reward_input: batch.a_r,
             self.local_network.base_a: batch.a,
             self.local_network.base_adv: batch.adv,
-            self.local_network.base_r: batch.r,
-            #self.local_network.base_initial_lstm_state: batch.features[0],
+            self.local_network.base_r: batch.discrewards,
             # [common]
             self.learning_rate_input: cur_learning_rate
         }
-        
+        #logger.debug(batch.__dict__)
         
         # Calculate gradients and copy them to global network.
-        [_, grad], policy_loss, value_loss, entropy, baseinput, policy, value = sess.run(
+        [_, grad], policy_loss, value_loss, entr, baseinput, policy, value = sess.run(
                                               [self.apply_gradients,
                                               self.local_network.policy_loss,
                                               self.local_network.value_loss,
                                               self.local_network.entropy, 
                                               self.local_network.base_input,
-                                              self.local_network.base_pi,
+                                              self.local_network.log_prob,
                                               self.local_network.base_v],
                                      feed_dict=feed_dict )
         self.ep_l += batch.si.shape[0]
         self.ep_ploss += policy_loss
         self.ep_vloss += value_loss
-        self.ep_entr.append(entropy)
+        self.ep_entr.append(entr)
 
         self.ep_grad.append(grad)
         # add batch to experience replay

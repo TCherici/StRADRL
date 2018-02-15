@@ -34,6 +34,7 @@ class UnrealModel(object):
     """
     def __init__(self,
                 action_size,
+                is_discrete,
                 obs_size,
                 thread_index, # -1 for global
                 entropy_beta,
@@ -55,8 +56,9 @@ class UnrealModel(object):
                 use_base=True):
         self._device = device
         self._action_size = action_size
+        self._is_discrete = is_discrete
         self._obs_size = obs_size
-        self.input_shape = [None, self._obs_size]     
+        self._input_shape = [None, self._obs_size]     
         self._thread_index = thread_index
         self._use_pixel_change = use_pixel_change
         self._use_value_replay = use_value_replay
@@ -74,16 +76,11 @@ class UnrealModel(object):
         self._value_lambda = value_lambda
         self._entropy_beta = entropy_beta
         self.reuse_conv = False
-        self.reuse_lstm = False
+        self.reuse_fc = False
         self.reuse_value = False
         self.reuse_policy = False
         self._create_network(for_display)
 
-
-        
-    def get_initial_features(self):
-        return self.state_init
-    
     def _create_network(self, for_display):
         scope_name = "net_{}".format(self._thread_index)
         logger.debug("creating network -- scope_name:{} -- device:{}".format(scope_name,self._device))
@@ -126,44 +123,22 @@ class UnrealModel(object):
             if self._use_repeatability:
                 self._create_rep_network()
             
-            self.reset_state()
 
             self.variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=scope_name)
 
 
     def _create_base_network(self):
         # State (Base image input)
-        self.base_input = tf.placeholder("float", self.input_shape, name="base_input")
+        self.base_input = tf.placeholder("float", self._input_shape, name="base_input")
         
-        #self.base_flat = tf.reshape(self.base_input, [-1, 7*7*self._ch_num])
-        # Last action and reward
-        self.base_last_action_reward_input = tf.placeholder("float", [None, self._action_size+1])
-        
-        # Fully connected layers (we "borrow" the reuse_lstm boolean)
-        self.base_fc_outputs = self._fc_layers(self.base_input, reuse=self.reuse_lstm)
-        
-        ## Conv layers
-        #base_conv_output = self._base_conv_layers(self.base_input, reuse=self.reuse_conv)
-        
-        ## LSTM layer
-        #self.base_initial_lstm_state0 = tf.placeholder(tf.float32, [1, 256])
-        #self.base_initial_lstm_state1 = tf.placeholder(tf.float32, [1, 256], name='bils1')
+        # Fully connected layers
+        self.base_fc_outputs = self._fc_layers(self.base_input, reuse=self.reuse_fc)
 
-        #self.base_initial_lstm_state = tf.contrib.rnn.LSTMStateTuple(self.base_initial_lstm_state0,
-        #                                                             self.base_initial_lstm_state1)
+        if self._is_discrete:
+            self.base_pi, self.base_pi_log, self.base_pi_linear = self._base_policy_layer_discrete(self.base_fc_outputs, reuse=self.reuse_policy) # discrete policy output
+        else:
+            self.base_distr, self.base_pi = self._base_policy_layer(self.base_fc_outputs, reuse=self.reuse_policy) # policy output
         
-        #c_init = np.zeros((self.base_initial_lstm_state[0].shape), np.float32)
-        #h_init = np.zeros((self.base_initial_lstm_state[1].shape), np.float32)
-        self.state_init = []
-        
-        
-        #self.base_lstm_outputs, self.base_lstm_state = \
-        #    self._base_lstm_layer(base_conv_output,
-        #                          self.base_last_action_reward_input,
-        #                          self.base_initial_lstm_state,
-        #                          reuse=self.reuse_lstm)
-
-        self.base_pi, self.base_pi_log, self.base_pi_linear = self._base_policy_layer(self.base_fc_outputs, reuse=self.reuse_policy) # policy output
         self.base_v  = self._base_value_layer(self.base_fc_outputs, reuse=self.reuse_value)  # value output
 
     def _fc_layers(self, state_input, reuse=False):
@@ -181,12 +156,11 @@ class UnrealModel(object):
             out_fc_2 = tf.nn.dropout(tf.nn.relu(tf.matmul(out_fc_1, W_fc_2) + b_fc_2),0.5)
             #out_fc_3 = tf.nn.dropout(tf.nn.relu(tf.matmul(out_fc_2, W_fc_3) + b_fc_3),0.5)
             
-            self.reuse_lstm = True # "borrowed lstm reuse check"
+            self.reuse_fc = True # "borrowed lstm reuse check"
         
             return out_fc_2
-        
-
-    def _base_policy_layer(self, lstm_outputs, reuse=False):
+            
+    def _base_policy_layer(self, fc_outputs, reuse=False):
         with tf.variable_scope("base_policy", reuse=reuse) as scope:
             # Weight for policy output layer
             W_fc_p, b_fc_p = self._fc_variable([64, self._action_size], "base_fc_p")
@@ -196,7 +170,7 @@ class UnrealModel(object):
             
             # Policy (output)
             #logger.warn(" !! doing some tricks with the policy layer, have a look !!")
-            base_pi_linear = tf.matmul(lstm_outputs, W_fc_p) + b_fc_p
+            base_pi_linear = tf.matmul(fc_outputs, W_fc_p) + b_fc_p
             base_pi = tf.nn.softmax(base_pi_linear)
             #base_pi = base_pi_linear
             base_pi_log = tf.nn.log_softmax(base_pi_linear)
@@ -204,10 +178,41 @@ class UnrealModel(object):
             # set reuse to True to make aux tasks reuse the variables
             self.reuse_policy = True
             
-            return base_pi, base_pi_log, base_pi_linear
+        return base_pi, base_pi_log, base_pi_linear
+
+    def _base_policy_layer(self, fc_outputs, reuse=False):
+        with tf.variable_scope("base_policy", reuse=reuse) as scope:
+            # Weight for policy output layer
+            W_fc_p, b_fc_p = self._fc_variable([64, 2*self._action_size], "base_fc_p")
+            tf.summary.histogram("policyW", W_fc_p)
+            tf.summary.histogram("policyb", b_fc_p)
+
+            # Policy (output)
+            #logger.warn(" !! doing some tricks with the policy layer, have a look !!")
+            base_pi_linear = tf.matmul(fc_outputs, W_fc_p) + b_fc_p
+            
+            base_pi_linear = tf.reshape(base_pi_linear,[-1,self._action_size,2])
+            mu = base_pi_linear[...,0]
+            sigma = base_pi_linear[...,1]
+            sigmarelu = tf.nn.softmax(sigma)
+            logger.debug(mu.shape)
+            logger.debug(sigmarelu.shape)
+            
+            distr = tf.distributions.Normal(mu,sigmarelu,validate_args=False,allow_nan_stats=True)
+            
+            sample = distr.sample()
+            
+            #base_pi = tf.nn.softmax(base_pi_linear)
+            #base_pi = base_pi_linear
+            #base_pi_log = tf.nn.log_softmax(base_pi_linear)
+            
+            # set reuse to True to make aux tasks reuse the variables
+            self.reuse_policy = True
+            
+            return distr, sample
 
 
-    def _base_value_layer(self, lstm_outputs, reuse=False):
+    def _base_value_layer(self, fc_outputs, reuse=False):
         with tf.variable_scope("base_value", reuse=reuse) as scope:
             # Weight for value output layer
             W_fc_v, b_fc_v = self._fc_variable([64, 1], "base_fc_v")
@@ -217,8 +222,8 @@ class UnrealModel(object):
             
             # Value (output)
             #logger.warn("!! ELU set for value !!")
-            #v_ = tf.nn.elu(tf.matmul(lstm_outputs, W_fc_v) + b_fc_v)
-            v_ = tf.matmul(lstm_outputs, W_fc_v) + b_fc_v
+            #v_ = tf.nn.elu(tf.matmul(fc_outputs, W_fc_v) + b_fc_v)
+            v_ = tf.matmul(fc_outputs, W_fc_v) + b_fc_v
             base_v = tf.reshape( v_, [-1] )
 
             # set reuse to True to make aux tasks reuse the variables
@@ -230,25 +235,23 @@ class UnrealModel(object):
 
     def _create_vr_network(self):
         # State (Image input)
-        self.vr_input = tf.placeholder("float", self.input_shape, name="vr_input")
+        self.vr_input = tf.placeholder("float", self._input_shape, name="vr_input")
 
-        # Last action and reward
-        self.vr_last_action_reward_input = tf.placeholder("float", [None, self._action_size+1])
         
-        vr_lstm_outputs = self._fc_layers(self.vr_input, reuse=self.reuse_lstm)
+        vr_fc_outputs = self._fc_layers(self.vr_input, reuse=self.reuse_fc)
         
         # value output
-        self.vr_v  = self._base_value_layer(vr_lstm_outputs, reuse=self.reuse_value)
+        self.vr_v  = self._base_value_layer(vr_fc_outputs, reuse=self.reuse_value)
 
     
     def _create_rp_network(self):
-        self.rp_input = tf.placeholder("float", self.input_shape)
+        self.rp_input = tf.placeholder("float", self._input_shape)
         """
         # RP conv layers
         rp_conv_output = self._base_conv_layers(self.rp_input, reuse=self.reuse_conv)
         rp_conv_output_reshaped = tf.reshape(rp_conv_output, [1,9*9*32*3])
         """
-        rp_fc_output = self._fc_layers(self.rp_input, reuse=self.reuse_lstm)
+        rp_fc_output = self._fc_layers(self.rp_input, reuse=self.reuse_fc)
         
         with tf.variable_scope("rp_fc") as scope:
             # Weights
@@ -261,12 +264,12 @@ class UnrealModel(object):
     # temporal coherence
     def _create_tc_network(self):
         # Observations (input)
-        self.tc_input1 = tf.placeholder("float", self.input_shape, name="tc_input1")
-        self.tc_input2 = tf.placeholder("float", self.input_shape, name="tc_input2")
+        self.tc_input1 = tf.placeholder("float", self._input_shape, name="tc_input1")
+        self.tc_input2 = tf.placeholder("float", self._input_shape, name="tc_input2")
 
         # fc output is our internal state s
-        tc_output1 = self._fc_layers(self.tc_input1, reuse=self.reuse_lstm)
-        tc_output2 = self._fc_layers(self.tc_input2, reuse=self.reuse_lstm)
+        tc_output1 = self._fc_layers(self.tc_input1, reuse=self.reuse_fc)
+        tc_output2 = self._fc_layers(self.tc_input2, reuse=self.reuse_fc)
         
         # loss is norm of fc output difference
         self.tc_q = tf.reduce_mean(tf.norm(tc_output2-tc_output1))
@@ -274,18 +277,18 @@ class UnrealModel(object):
     # proportionality
     def _create_prop_network(self):
         # Observations (input)
-        self.prop_input1_1 = tf.placeholder("float", self.input_shape, name="prop_input1_1")
-        self.prop_input1_2 = tf.placeholder("float", self.input_shape, name="prop_input1_2")
-        self.prop_input2_1 = tf.placeholder("float", self.input_shape, name="prop_input2_1")
-        self.prop_input2_2 = tf.placeholder("float", self.input_shape, name="prop_input2_2")
+        self.prop_input1_1 = tf.placeholder("float", self._input_shape, name="prop_input1_1")
+        self.prop_input1_2 = tf.placeholder("float", self._input_shape, name="prop_input1_2")
+        self.prop_input2_1 = tf.placeholder("float", self._input_shape, name="prop_input2_1")
+        self.prop_input2_2 = tf.placeholder("float", self._input_shape, name="prop_input2_2")
         # Boolean vector check for if actions 1 and 2 are equal
         self.prop_actioncheck = tf.placeholder("float", [None,], name="prop_actioncheck")
 
         # get fc outputs (our internal state s)
-        prop_output1_1 = self._fc_layers(self.prop_input1_1, reuse=self.reuse_lstm)
-        prop_output1_2 = self._fc_layers(self.prop_input1_2, reuse=self.reuse_lstm)
-        prop_output2_1 = self._fc_layers(self.prop_input2_1, reuse=self.reuse_lstm)
-        prop_output2_2 = self._fc_layers(self.prop_input2_2, reuse=self.reuse_lstm)
+        prop_output1_1 = self._fc_layers(self.prop_input1_1, reuse=self.reuse_fc)
+        prop_output1_2 = self._fc_layers(self.prop_input1_2, reuse=self.reuse_fc)
+        prop_output2_1 = self._fc_layers(self.prop_input2_1, reuse=self.reuse_fc)
+        prop_output2_2 = self._fc_layers(self.prop_input2_2, reuse=self.reuse_fc)
         
         prop_ds1 = tf.norm(prop_output1_2-prop_output1_1,axis=1)
         prop_ds2 = tf.norm(prop_output2_2-prop_output2_1,axis=1)
@@ -295,15 +298,15 @@ class UnrealModel(object):
         
     def _create_caus_network(self):
         # Observations (input)
-        self.caus_input1 = tf.placeholder("float", self.input_shape, name="caus_input1")
-        self.caus_input2 = tf.placeholder("float", self.input_shape, name="caus_input2")
+        self.caus_input1 = tf.placeholder("float", self._input_shape, name="caus_input1")
+        self.caus_input2 = tf.placeholder("float", self._input_shape, name="caus_input2")
         # Boolean vector check for if actions 1 and 2 are equal
         self.caus_actioncheck = tf.placeholder("float", [None,], name="caus_actioncheck")
         # Boolean vector check for if reward 1 and 2 are different
         self.caus_rewardcheck = tf.placeholder("float", [None,], name="caus_rewardcheck")
         
-        caus_out1 = self._fc_layers(self.caus_input1, reuse=self.reuse_lstm)
-        caus_out2 = self._fc_layers(self.caus_input2, reuse=self.reuse_lstm)
+        caus_out1 = self._fc_layers(self.caus_input1, reuse=self.reuse_fc)
+        caus_out2 = self._fc_layers(self.caus_input2, reuse=self.reuse_fc)
         
         caus_state_distance = tf.exp(-tf.norm(caus_out2-caus_out1,axis=1))
         
@@ -312,18 +315,18 @@ class UnrealModel(object):
         
     def _create_rep_network(self):
         # Observations (input)
-        self.rep_input1_1 = tf.placeholder("float", self.input_shape, name="rep_input1_1")
-        self.rep_input1_2 = tf.placeholder("float", self.input_shape, name="rep_input1_2")
-        self.rep_input2_1 = tf.placeholder("float", self.input_shape, name="rep_input2_1")
-        self.rep_input2_2 = tf.placeholder("float", self.input_shape, name="rep_input2_2")
+        self.rep_input1_1 = tf.placeholder("float", self._input_shape, name="rep_input1_1")
+        self.rep_input1_2 = tf.placeholder("float", self._input_shape, name="rep_input1_2")
+        self.rep_input2_1 = tf.placeholder("float", self._input_shape, name="rep_input2_1")
+        self.rep_input2_2 = tf.placeholder("float", self._input_shape, name="rep_input2_2")
         # Boolean vector check for if actions 1 and 2 are equal
         self.rep_actioncheck = tf.placeholder("float", [None,], name="rep_actioncheck")
 
         # get fc outputs (our internal state s)
-        rep_out1_1 = self._fc_layers(self.rep_input1_1, reuse=self.reuse_lstm)
-        rep_out1_2 = self._fc_layers(self.rep_input1_2, reuse=self.reuse_lstm)
-        rep_out2_1 = self._fc_layers(self.rep_input2_1, reuse=self.reuse_lstm)
-        rep_out2_2 = self._fc_layers(self.rep_input2_2, reuse=self.reuse_lstm)
+        rep_out1_1 = self._fc_layers(self.rep_input1_1, reuse=self.reuse_fc)
+        rep_out1_2 = self._fc_layers(self.rep_input1_2, reuse=self.reuse_fc)
+        rep_out2_1 = self._fc_layers(self.rep_input2_1, reuse=self.reuse_fc)
+        rep_out2_2 = self._fc_layers(self.rep_input2_2, reuse=self.reuse_fc)
         
         rep_sq_diff_s_change = tf.norm((rep_out2_2-rep_out2_1)-(rep_out1_2-rep_out1_1),axis=1)
         
@@ -338,12 +341,15 @@ class UnrealModel(object):
         
         # Advantage (R-V) (input for policy)
         self.base_adv = tf.placeholder("float", [None])
-               
-        base_a_ind = tf.argmax(self.base_a, axis=1)
-        
-        neglogpac = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.base_pi_linear, labels=base_a_ind)
+        if self._is_discrete:
+            base_a_ind = tf.argmax(self.base_a, axis=1)
+            self.log_prob = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.base_pi_linear, labels=base_a_ind)
+        else:
+            self.log_prob = tf.reduce_sum(self.base_distr.log_prob(self.base_a), axis=1)
+            logger.debug("log_prob shape:{}".format(self.log_prob.shape))
         # Policy loss (output)
-        self.policy_loss = tf.reduce_mean(self.base_adv * neglogpac)
+        self.policy_loss = tf.reduce_mean(self.base_adv * self.log_prob)
+        logger.debug("self.policy_loss shape:{}".format(self.policy_loss.shape))
         
         # R (input for value target)
         self.base_r = tf.placeholder("float", [None])
@@ -352,9 +358,13 @@ class UnrealModel(object):
         # (Learning rate for Critic is half of Actor's, so multiply by 0.5)
         self.value_loss = self._value_lambda * tf.reduce_sum(tf.square(self.base_v - self.base_r))
         
-        # Policy entropy
-        self.entropy = -tf.reduce_sum(self.base_pi * self.base_pi_log) * self._entropy_beta
         
+        if self._is_discrete:
+            # Policy entropy
+            self.entropy = self._entropy_beta - tf.reduce_sum(self.base_pi * self.base_pi_log) * self._entropy_beta
+        else:
+            self.entropy = tf.zeros([], dtype=np.float32)
+            
         base_loss = self.policy_loss + self.value_loss - self.entropy
         return base_loss
 
@@ -454,35 +464,26 @@ class UnrealModel(object):
             self.total_loss = loss
 
 
-    def reset_state(self):
-        self.base_lstm_state_out = []
-                                                             
-    def set_state(self, features):
-        self.base_lstm_state_out = features#tf.contrib.rnn.LSTMStateTuple(features[0],features[1])
-
-    def run_base_policy_and_value(self, sess, s_t, last_action_reward):
+    def run_base_policy_and_value(self, sess, s_t):
         # This run_base_policy_and_value() is used when forward propagating.
         # so the step size is 1.
         pi_out, v_out = sess.run( [self.base_pi, self.base_v],
-                                    feed_dict = {self.base_input : [s_t],
-                                                 self.base_last_action_reward_input : [last_action_reward]} )
+                                    feed_dict = {self.base_input : [s_t]} )
         # pi_out: (1,3), v_out: (1)
-        return (pi_out[0], v_out[0], [])
+        return (pi_out[0], v_out[0])
   
-    def run_base_value(self, sess, s_t, last_action_reward):
+    def run_base_value(self, sess, s_t):
         # This run_base_value() is used for calculating V for bootstrapping at the 
         # end of LOCAL_T_MAX time step sequence.
         # When the next sequence starts, V will be calculated again with the same state using updated network weights,
         # so we don't update LSTM state here.
         v_out = sess.run( [self.base_v],
-                             feed_dict = {self.base_input : [s_t],
-                                          self.base_last_action_reward_input : [last_action_reward]} )
+                             feed_dict = {self.base_input : [s_t]} )
         return v_out[0]
   
-    def run_vr_value(self, sess, s_t, last_action_reward):
+    def run_vr_value(self, sess, s_t):
         vr_v_out = sess.run( self.vr_v,
-                         feed_dict = {self.vr_input : [s_t],
-                                      self.vr_last_action_reward_input : [last_action_reward]} )
+                         feed_dict = {self.vr_input : [s_t]} )
         return vr_v_out[0]
 
   

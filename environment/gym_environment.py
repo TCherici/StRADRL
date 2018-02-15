@@ -64,9 +64,15 @@ class GymEnvironment(environment.Environment):
   @staticmethod
   def get_action_size(env_name):
     env = gym.make(env_name)
-    action_size = env.action_space.n
+    if isinstance(env.action_space, gym.spaces.Box):
+      dim = env.action_space.shape[0]
+      discrete = False
+    elif isintance(env.action_space, gym.spaces.n):
+      dim = env.action_space.n
+      discrete = True
+        
     env.close()
-    return action_size
+    return dim, discrete
     
   @staticmethod  
   def get_obs_size(env_name):
@@ -77,7 +83,7 @@ class GymEnvironment(environment.Environment):
   
   def __init__(self, env_name):
     environment.Environment.__init__(self)
-
+    
     self.conn, child_conn = Pipe()
     self.proc = Process(target=worker, args=(child_conn, env_name))
     self.proc.start()
@@ -87,13 +93,7 @@ class GymEnvironment(environment.Environment):
   def reset(self):
     self.conn.send([COMMAND_RESET, 0])
     self.last_state = self.conn.recv()
-    
-    self.last_action = 0
-    self.last_reward = 0
-
-    last_action_reward = np.zeros([self.action_size+1])
-        
-    return self.last_state, last_action_reward
+    return self.last_state
 
   def stop(self):
     self.conn.send([COMMAND_TERMINATE, 0])
@@ -102,9 +102,9 @@ class GymEnvironment(environment.Environment):
     self.proc.join()
     logger.warn("gym environment stopped")
 
-  def process(self, action_oh):
-    action = np.argmax(action_oh)
+  def process(self, action):
     self.conn.send([COMMAND_ACTION, action])
+    #logger.debug("action:{}".format(action))
     try:
         state, reward, terminal = self.conn.recv()
     except TypeError:
@@ -117,8 +117,6 @@ class GymEnvironment(environment.Environment):
     #pixel_change = self._calc_pixel_change(state, self.last_state)
     pixel_change = []
     self.last_state = state
-    self.last_action = action
-    self.last_reward = reward
     return state, reward, terminal, pixel_change
     
   def render(self):

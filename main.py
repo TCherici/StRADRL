@@ -88,8 +88,6 @@ class Application(object):
         self.terminate_requested = True
         self.environment.stop()
         #sys.exit(0)
-        time.sleep(1)
-        os._exit(0)
             
     def aux_train_function(self, aux_index):
         """ Train routine for aux_trainer. """
@@ -112,7 +110,8 @@ class Application(object):
                                         self.aux_t,
                                         self.summary_writer,
                                         self.summary_op_aux,
-                                        self.summary_aux)
+                                        self.summary_aux,
+                                        flags)
             self.aux_t += diff_aux_t
             
         logger.warn("!!! stopping aux at aux_t:{}".format(self.aux_t))
@@ -130,11 +129,12 @@ class Application(object):
         self.stop_requested = False
         self.terminate_requested = False
         logger.debug("getting action size and observation size...")
-        action_size = Environment.get_action_size(flags.env_type, flags.env_name)
+        action_size, is_discrete = Environment.get_action_size(flags.env_type, flags.env_name)
         obs_size = Environment.get_obs_size(flags.env_type, flags.env_name)
         # Setup Global Network
         logger.debug("loading global model...")
         self.global_network = UnrealModel(action_size,
+                                          is_discrete,
                                           obs_size,
                                           -1,
                                           flags.entropy_beta,
@@ -177,7 +177,6 @@ class Application(object):
         self.runner = RunnerThread(flags,
                                    self.environment,
                                    self.global_network,
-                                   action_size,
                                    obs_size,
                                    device,
                                    visualise)
@@ -207,34 +206,13 @@ class Application(object):
         for k in range(flags.parallel_size):
             self.aux_trainers.append(AuxTrainer(self.global_network,
                                                 k+2, #-1 is global, 0 is runnerthread, 1 is base
-                                                flags.use_base,
-                                                flags.use_pixel_change, 
-                                                flags.use_value_replay,
-                                                flags.use_reward_prediction,
-                                                flags.use_temporal_coherence,
-                                                flags.use_proportionality,
-                                                flags.use_causality,
-                                                flags.use_repeatability,
-                                                flags.value_lambda,
-                                                flags.pixel_change_lambda,
-                                                flags.temporal_coherence_lambda,
-                                                flags.proportionality_lambda,
-                                                flags.causality_lambda,
-                                                flags.repeatability_lambda,
-                                                flags.aux_initial_learning_rate,
                                                 learning_rate_input,
                                                 grad_applier,
-                                                self.aux_t,
-                                                flags.env_type,
-                                                flags.env_name,
-                                                flags.entropy_beta,
-                                                flags.local_t_max,
                                                 flags.gamma,
-                                                flags.aux_lambda,
-                                                flags.gamma_pc,
                                                 self.experience,
                                                 flags.max_time_step,
-                                                device))
+                                                device,
+                                                flags))
         
         # Start tensorflow session
         config = tf.ConfigProto(log_device_placement=False,
@@ -293,8 +271,9 @@ class Application(object):
 
         logger.info('Press Ctrl+C to stop')
         signal.pause()
+        logger.warn('exiting run. terminate_requested:{}'.format(self.terminate_requested))
+        logger.debug(threading.enumerate())
         
-    
     def init_tensorboard(self):
         # tensorboard summary for base 
         self.score_input = tf.placeholder(tf.int32)
@@ -401,9 +380,10 @@ class Application(object):
         self.next_save_steps += flags.save_interval_step
 
     def signal_handler(self, signal, frame):
-        logger.warn('Ctrl+C detected, shutting down...')
-        logger.info('run name: {} -- terminated'.format(TRAINING_NAME))
         self.terminate_requested = True
+        logger.warn('run name: {} -- terminating...'.format(TRAINING_NAME))
+        time.sleep(1)
+        
 
 def main(argv):
     app = Application()
