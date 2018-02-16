@@ -12,12 +12,12 @@ def get_options(option_type):
     'training' or 'diplay' or 'visualize'
   """    
   # name
-  tf.app.flags.DEFINE_string("training_name","muj2d_v3","name of next training in log")
+  tf.app.flags.DEFINE_string("training_name","mujpend2_tanhmu2","name of next training in log")
 
     
   # Common
   tf.app.flags.DEFINE_string("env_type", "gym", "environment type (lab or gym or maze)")
-  tf.app.flags.DEFINE_string("env_name", "Swimmer-v1",  "environment name (for lab)")
+  tf.app.flags.DEFINE_string("env_name", "InvertedPendulum-v1",  "environment name (for lab)")
   tf.app.flags.DEFINE_integer("env_max_steps", 400000, "max number of steps in environment")
   
   tf.app.flags.DEFINE_boolean("use_base", False, "whether to use base A3C for aux network")
@@ -41,13 +41,13 @@ def get_options(option_type):
     #base
     tf.app.flags.DEFINE_float("initial_learning_rate", 0.001, "learning rate")
     tf.app.flags.DEFINE_float("gamma", 0.99, "discount factor for rewards")
-    tf.app.flags.DEFINE_float("entropy_beta", 0.1, "entropy regurarlization constant")
-    tf.app.flags.DEFINE_float("value_lambda", 0.001, "value ratio for base loss")
+    tf.app.flags.DEFINE_float("entropy_beta", 0.0, "entropy regurarlization constant")
+    tf.app.flags.DEFINE_float("value_lambda", 0.5, "value ratio for base loss")
     tf.app.flags.DEFINE_float("base_lambda", 0.9, "generalized adv. est. lamba for short-long sight")
     
     
     # auxiliary
-    tf.app.flags.DEFINE_integer("parallel_size", 1, "parallel thread size")
+    tf.app.flags.DEFINE_integer("parallel_size", 0, "parallel thread size")
     tf.app.flags.DEFINE_float("aux_initial_learning_rate", 0.001, "learning rate")
     tf.app.flags.DEFINE_float("aux_lambda", 0.0, "generalized adv. est. lamba for short-long sight (aux)")
     tf.app.flags.DEFINE_float("gamma_pc", 0.9, "discount factor for pixel control")

@@ -70,7 +70,6 @@ class GymEnvironment(environment.Environment):
     elif isintance(env.action_space, gym.spaces.n):
       dim = env.action_space.n
       discrete = True
-        
     env.close()
     return dim, discrete
     

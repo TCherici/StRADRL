@@ -160,7 +160,7 @@ class UnrealModel(object):
         
             return out_fc_2
             
-    def _base_policy_layer(self, fc_outputs, reuse=False):
+    def _base_policy_layer_discrete(self, fc_outputs, reuse=False):
         with tf.variable_scope("base_policy", reuse=reuse) as scope:
             # Weight for policy output layer
             W_fc_p, b_fc_p = self._fc_variable([64, self._action_size], "base_fc_p")
@@ -192,7 +192,7 @@ class UnrealModel(object):
             base_pi_linear = tf.matmul(fc_outputs, W_fc_p) + b_fc_p
             
             base_pi_linear = tf.reshape(base_pi_linear,[-1,self._action_size,2])
-            mu = base_pi_linear[...,0]
+            mu = tf.nn.tanh(base_pi_linear[...,0])
             sigma = base_pi_linear[...,1]
             sigmarelu = tf.nn.softmax(sigma)
             logger.debug(mu.shape)

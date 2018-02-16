@@ -206,7 +206,7 @@ class BaseTrainer(object):
                                               self.local_network.value_loss,
                                               self.local_network.entropy, 
                                               self.local_network.base_input,
-                                              self.local_network.log_prob,
+                                              self.local_network.base_pi,
                                               self.local_network.base_v],
                                      feed_dict=feed_dict )
         self.ep_l += batch.si.shape[0]
