@@ -9,13 +9,14 @@ import logging
 
 logger = logging.getLogger('StRADRL.model')
 
-SEED = 4444#3000
+#SEED = 4444#3000
 
 # weight initialization based on muupan's code
 # https://github.com/muupan/async-rl/blob/master/a3c_ale.py
 def fc_initializer(input_channels, dtype=tf.float32):
     def _initializer(shape, dtype=dtype, partition_info=None):
-        d = 1.0 / np.sqrt(input_channels)
+        #d = 1.0 / np.sqrt(input_channels)
+        d = 0.001
         #d = np.sqrt(1/input_channels)
         return tf.random_uniform(shape, minval=-d, maxval=d)#, seed=SEED)
     return _initializer
@@ -149,11 +150,11 @@ class UnrealModel(object):
             W_fc_2, b_fc_2 = self._fc_variable([64, 64], "base_fc_2")
             #W_fc_3, b_fc_3 = self._fc_variable([256, 256], "base_fc_3")
             
-            #out_fc_1 = tf.nn.relu(tf.matmul(state_input, W_fc_1) + b_fc_1)     
-            #out_fc_2 = tf.nn.relu(tf.matmul(out_fc_1, W_fc_2) + b_fc_2)
+            out_fc_1 = tf.nn.tanh(tf.matmul(state_input, W_fc_1) + b_fc_1)     
+            out_fc_2 = tf.nn.tanh(tf.matmul(out_fc_1, W_fc_2) + b_fc_2)
             
-            out_fc_1 = tf.nn.dropout(tf.nn.relu(tf.matmul(state_input, W_fc_1) + b_fc_1),0.5)     
-            out_fc_2 = tf.nn.dropout(tf.nn.relu(tf.matmul(out_fc_1, W_fc_2) + b_fc_2),0.5)
+            #out_fc_1 = tf.nn.dropout(tf.nn.relu(tf.matmul(state_input, W_fc_1) + b_fc_1),0.5)     
+            #out_fc_2 = tf.nn.dropout(tf.nn.relu(tf.matmul(out_fc_1, W_fc_2) + b_fc_2),0.5)
             #out_fc_3 = tf.nn.dropout(tf.nn.relu(tf.matmul(out_fc_2, W_fc_3) + b_fc_3),0.5)
             
             self.reuse_fc = True # "borrowed lstm reuse check"
@@ -184,9 +185,10 @@ class UnrealModel(object):
         with tf.variable_scope("base_policy", reuse=reuse) as scope:
             # Weight for policy output layer
             W_fc_p, b_fc_p = self._fc_variable([64, 2*self._action_size], "base_fc_p")
+            #b_fc_p += -2.
             tf.summary.histogram("policyW", W_fc_p)
             tf.summary.histogram("policyb", b_fc_p)
-
+            
             # Policy (output)
             #logger.warn(" !! doing some tricks with the policy layer, have a look !!")
             base_pi_linear = tf.matmul(fc_outputs, W_fc_p) + b_fc_p
@@ -194,11 +196,9 @@ class UnrealModel(object):
             base_pi_linear = tf.reshape(base_pi_linear,[-1,self._action_size,2])
             mu = tf.nn.tanh(base_pi_linear[...,0])
             sigma = base_pi_linear[...,1]
-            sigmarelu = tf.nn.softmax(sigma)
-            logger.debug(mu.shape)
-            logger.debug(sigmarelu.shape)
+            sigma = tf.multiply(tf.nn.softmax(sigma),0.1)
             
-            distr = tf.distributions.Normal(mu,sigmarelu,validate_args=False,allow_nan_stats=True)
+            distr = tf.distributions.Normal(mu,sigma,validate_args=False,allow_nan_stats=True)
             
             sample = distr.sample()
             
@@ -346,10 +346,10 @@ class UnrealModel(object):
             self.log_prob = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.base_pi_linear, labels=base_a_ind)
         else:
             self.log_prob = tf.reduce_sum(self.base_distr.log_prob(self.base_a), axis=1)
-            logger.debug("log_prob shape:{}".format(self.log_prob.shape))
+            #logger.debug("log_prob shape:{}".format(self.log_prob.shape))
         # Policy loss (output)
         self.policy_loss = tf.reduce_mean(self.base_adv * self.log_prob)
-        logger.debug("self.policy_loss shape:{}".format(self.policy_loss.shape))
+        #logger.debug("self.policy_loss shape:{}".format(self.policy_loss.shape))
         
         # R (input for value target)
         self.base_r = tf.placeholder("float", [None])

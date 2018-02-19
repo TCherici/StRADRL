@@ -8,6 +8,7 @@ import numpy as np
 import cv2
 import gym
 import logging
+import time
 
 from environment import environment
 
@@ -26,6 +27,15 @@ def preprocess_frame(observation):
   resized_observation = resized_observation / 255.0
   return resized_observation
 """
+
+def preprocess_action(policy, lows, highs):
+  # from policy in range 0,1 to actions in range low,high
+  actrange = highs-lows
+  action = lows + policy*actrange
+  action[action > highs] = highs
+  action[action < lows] = lows
+  return action
+
 def worker(conn, env_name):
   env = gym.make(env_name)
   env.reset()
@@ -40,11 +50,15 @@ def worker(conn, env_name):
       state = obs
       conn.send(state)
     elif command == COMMAND_ACTION:
-      reward = 0
-      for i in range(1):
-        obs, r, terminal, _ = env.step(arg)
+      #action = preprocess_action(arg, env.action_space.low, env.action_space.high)
+      action = arg
+      #logger.debug("policy:{}  - action:{}".format(arg,action))
+      reward = 0.
+      for i in range(4):
+        obs, r, terminal, _ = env.step(action)
         reward += r
         if terminal:
+          reward -= 10
           break
       #state = preprocess_frame(obs)
       state = obs
@@ -67,6 +81,9 @@ class GymEnvironment(environment.Environment):
     if isinstance(env.action_space, gym.spaces.Box):
       dim = env.action_space.shape[0]
       discrete = False
+      logger.info("action space:")
+      logger.info("    high:{}".format(env.action_space.high))
+      logger.info("     low:{}".format(env.action_space.low))
     elif isintance(env.action_space, gym.spaces.n):
       dim = env.action_space.n
       discrete = True

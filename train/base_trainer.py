@@ -197,8 +197,18 @@ class BaseTrainer(object):
             # [common]
             self.learning_rate_input: cur_learning_rate
         }
-        #logger.debug(batch.__dict__)
-        
+        """
+        logger.debug(batch.si.shape)
+        logger.debug(batch.a.shape)
+        logger.debug(batch.adv.shape)
+        logger.debug(batch.discrewards.shape)
+        logger.debug(batch.si[0])
+        logger.debug(batch.si[-1])
+        logger.debug(batch.a[0])
+        logger.debug(batch.a[-1])
+        logger.debug(batch.discrewards[0])
+        logger.debug(batch.discrewards[-1])
+        """
         # Calculate gradients and copy them to global network.
         [_, grad], policy_loss, value_loss, entr, baseinput, policy, value = sess.run(
                                               [self.apply_gradients,

@@ -34,7 +34,7 @@ class Experience(object):
   def add_frame(self, frame):
     if frame.terminal and len(self._frames) > 0 and self._frames[-1].terminal:
       # Discard if terminal frame continues
-      logger.info("Terminal frames continued.")
+      #logger.info("Terminal frames continued.")
       return
 
     frame_index = self._top_frame_index + len(self._frames)

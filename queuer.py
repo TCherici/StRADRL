@@ -111,7 +111,7 @@ def env_runner(env, sess, policy, num_local_steps, env_max_steps, action_freq, e
     last_state = env.reset()
     sess.run(syncfunc)
     length = 0
-    rewards = 0
+    rewards = 0.
     itercount = 0
     
     while True:
@@ -159,7 +159,7 @@ def env_runner(env, sess, policy, num_local_steps, env_max_steps, action_freq, e
                     # moved sync to start of cycle
                     assert True
                 length = 0
-                rewards = 0
+                rewards = 0.
                 break
                 
         if not terminal_end:
